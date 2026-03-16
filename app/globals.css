@@ -1,0 +1,298 @@
+@import "tailwindcss";
+
+:root {
+  --bg-main: #0d0f10;
+  --bg-elevated: #131617;
+  --bg-panel: rgba(20, 23, 24, 0.92);
+  --bg-panel-soft: rgba(28, 31, 33, 0.78);
+  --bg-chip: rgba(245, 245, 240, 0.08);
+
+  --border-main: rgba(244, 239, 224, 0.12);
+  --border-strong: rgba(244, 239, 224, 0.22);
+
+  --text-main: #f7f4ea;
+  --text-soft: #c8c1af;
+  --text-muted: #948c7e;
+
+  --accent-green: #1ed760;
+  --accent-green-deep: #169c47;
+  --accent-gold: #e8b04b;
+  --accent-red: #d6543a;
+  --accent-cream: #f4efe0;
+
+  --shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(30, 215, 96, 0.14), transparent 30%),
+    radial-gradient(circle at top right, rgba(214, 84, 58, 0.12), transparent 28%),
+    linear-gradient(180deg, #121516 0%, #0d0f10 56%, #090a0b 100%);
+}
+
+body {
+  min-height: 100%;
+  color: var(--text-main);
+  font-family: var(--font-manrope), sans-serif;
+  letter-spacing: -0.01em;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent 36%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.015) 0,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 120px
+    );
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.28;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 0.6px, transparent 0.6px);
+  background-size: 10px 10px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 85%);
+}
+
+h1,
+h2,
+h3,
+h4,
+.display-type {
+  font-family: var(--font-space-grotesk), sans-serif;
+  letter-spacing: -0.04em;
+}
+
+a {
+  transition: 180ms ease;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 82%, transparent);
+}
+
+::selection {
+  background: rgba(30, 215, 96, 0.95);
+  color: #08120d;
+}
+
+.page-shell {
+  width: min(1200px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  color: var(--text-muted);
+}
+
+.brand-mark::before {
+  content: "";
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-gold));
+  box-shadow: 0 0 20px rgba(30, 215, 96, 0.35);
+}
+
+.nav-link,
+.ghost-button,
+.solid-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.8rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.nav-link,
+.ghost-button {
+  color: var(--text-main);
+  border: 1px solid var(--border-main);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+}
+
+.nav-link:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.solid-button {
+  color: #0b120d;
+  background: linear-gradient(135deg, var(--accent-green), #65e08f 72%);
+  box-shadow: 0 14px 30px rgba(30, 215, 96, 0.26);
+}
+
+.solid-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 40px rgba(30, 215, 96, 0.3);
+}
+
+.kicker {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.hero-panel,
+.app-panel,
+.editorial-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-main);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(20px);
+}
+
+.hero-panel {
+  border-radius: 2rem;
+  background:
+    radial-gradient(circle at top left, rgba(30, 215, 96, 0.16), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(232, 176, 75, 0.12), transparent 24%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    rgba(17, 20, 21, 0.94);
+}
+
+.app-panel {
+  border-radius: 1.6rem;
+}
+
+.editorial-panel {
+  border-radius: 1.8rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+    rgba(20, 23, 24, 0.92);
+}
+
+.section-heading {
+  font-size: clamp(1.65rem, 3vw, 2.4rem);
+  line-height: 1;
+}
+
+.field-shell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-main);
+  background: rgba(248, 244, 234, 0.04);
+  padding: 0.45rem;
+}
+
+.field-shell input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text-main);
+  padding: 0.8rem 1rem;
+}
+
+.app-input,
+.app-textarea {
+  width: 100%;
+  border-radius: 1.1rem;
+  border: 1px solid var(--border-main);
+  background: rgba(248, 244, 234, 0.04);
+  color: var(--text-main);
+  outline: none;
+}
+
+.app-input {
+  padding: 0.9rem 1rem;
+}
+
+.app-textarea {
+  padding: 1rem;
+}
+
+.app-input:focus,
+.app-textarea:focus {
+  border-color: rgba(30, 215, 96, 0.5);
+  box-shadow: 0 0 0 4px rgba(30, 215, 96, 0.08);
+}
+
+.cover-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #111314;
+  background-position: center;
+  background-size: cover;
+}
+
+.cover-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.42));
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: rgba(244, 239, 224, 0.08);
+  color: var(--text-main);
+}
+
+.meta-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .page-shell {
+    width: min(1200px, calc(100% - 1.25rem));
+  }
+}
