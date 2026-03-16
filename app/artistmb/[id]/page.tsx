@@ -8,11 +8,11 @@ import StarRating from "@/components/StarRating";
 type Artist = {
   id: string;
   name: string;
-  type?: string;
   country?: string;
   origin?: string;
-  disambiguation?: string;
+  description?: string;
   bioSummary?: string;
+  sourceUrl?: string;
 };
 
 type Album = {
@@ -50,19 +50,11 @@ export default function ArtistPage() {
   }, [id]);
 
   if (loading) {
-    return (
-      <main className="min-h-screen p-8 text-[var(--text-main)]">
-        Loading artist...
-      </main>
-    );
+    return <main className="min-h-screen p-8 text-[var(--text-main)]">Loading artist...</main>;
   }
 
   if (!artist) {
-    return (
-      <main className="min-h-screen p-8 text-[var(--text-main)]">
-        Artist not found.
-      </main>
-    );
+    return <main className="min-h-screen p-8 text-[var(--text-main)]">Artist not found.</main>;
   }
 
   return (
@@ -96,19 +88,15 @@ export default function ArtistPage() {
 
             <div className="meta-grid">
               <div className="app-panel p-5">
-                <p className="kicker">Origin</p>
+                <p className="kicker">From</p>
                 <p className="mt-2 text-xl font-semibold">
                   {artist.origin || artist.country || "Unknown"}
                 </p>
               </div>
               <div className="app-panel p-5">
-                <p className="kicker">Type</p>
-                <p className="mt-2 text-xl font-semibold">{artist.type || "Unknown"}</p>
-              </div>
-              <div className="app-panel p-5">
-                <p className="kicker">Notes</p>
+                <p className="kicker">Known for</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
-                  {artist.disambiguation || "None"}
+                  {artist.description || "Public biography data"}
                 </p>
               </div>
               <div className="app-panel p-5">
@@ -117,13 +105,30 @@ export default function ArtistPage() {
                   {artistRating > 0 ? `${artistRating.toFixed(1)} / 5` : "Not rated yet"}
                 </p>
               </div>
+              <div className="app-panel p-5">
+                <p className="kicker">Biography source</p>
+                {artist.sourceUrl ? (
+                  <a
+                    href={artist.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex text-sm font-semibold text-[var(--accent-green)]"
+                  >
+                    Open public source
+                  </a>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
+                    Source link unavailable.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </section>
 
         <section className="editorial-panel p-6 md:p-7">
-          <p className="kicker">Discography</p>
-          <h2 className="section-heading mt-3 font-bold">Albums worth opening next.</h2>
+          <p className="kicker">Albums</p>
+          <h2 className="section-heading mt-3 font-bold">Where to go next.</h2>
 
           <div className="mt-6 space-y-4">
             {albums.map((album) => (

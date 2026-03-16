@@ -16,7 +16,6 @@ type ArtistRelation = {
 type ArtistResponse = {
   id: string;
   name: string;
-  type?: string;
   country?: string;
   disambiguation?: string;
   "begin-area"?: {
@@ -40,9 +39,23 @@ type AlbumsResponse = {
 
 type WikipediaSummaryResponse = {
   extract?: string;
+  description?: string;
+  content_urls?: {
+    desktop?: {
+      page?: string;
+    };
+  };
 };
 
-function getWikipediaTitle(relations?: ArtistRelation[]) {
+type WikipediaSearchResponse = {
+  query?: {
+    search?: Array<{
+      title?: string;
+    }>;
+  };
+};
+
+function getWikipediaTitleFromRelations(relations?: ArtistRelation[]) {
   const wikipediaUrl = relations?.find((relation) => relation.type === "wikipedia")?.url?.resource;
   if (!wikipediaUrl) return null;
 
@@ -62,15 +75,73 @@ function getShortBio(summary: string) {
     .split(/(?<=[.!?])\s+/)
     .filter(Boolean);
 
-  return sentences.slice(0, 3).join(" ");
+  return sentences.slice(0, 4).join(" ");
 }
 
 function buildFallbackBio(artist: ArtistResponse) {
   const location = artist["begin-area"]?.name || artist.area?.name || artist.country || "an unknown location";
-  const typeLabel = artist.type ? artist.type.toLowerCase() : "music artist";
-  const note = artist.disambiguation ? ` ${artist.disambiguation}.` : "";
+  return `${artist.name} is a recording artist from ${location}. A fuller source-backed biography is not available for this page yet.`;
+}
 
-  return `${artist.name} is a ${typeLabel} from ${location}.${note} They built traction through releases, performances, and recognition captured in the MusicBrainz catalog.`;
+async function findWikipediaTitleBySearch(artist: ArtistResponse) {
+  const searchParams = new URLSearchParams({
+    action: "query",
+    list: "search",
+    format: "json",
+    srlimit: "5",
+    srsearch: `${artist.name} musician ${artist.country || ""} ${artist.disambiguation || ""}`.trim(),
+  });
+
+  const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?${searchParams.toString()}`, {
+    headers: {
+      "User-Agent": "SoundAtlasApp/1.0 (learning project)",
+    },
+    cache: "no-store",
+  });
+
+  if (!searchRes.ok) {
+    return null;
+  }
+
+  const searchData = (await searchRes.json()) as WikipediaSearchResponse;
+  const results = searchData.query?.search ?? [];
+  const match = results.find((result) => {
+    const title = (result.title || "").toLowerCase();
+    return title.includes(artist.name.toLowerCase()) && !title.includes("disambiguation");
+  });
+
+  return match?.title ?? results[0]?.title ?? null;
+}
+
+async function fetchWikipediaSummary(artist: ArtistResponse) {
+  const relatedTitle = getWikipediaTitleFromRelations(artist.relations);
+  const searchTitle = relatedTitle || (await findWikipediaTitleBySearch(artist));
+  if (!searchTitle) return null;
+
+  const wikiRes = await fetch(
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(searchTitle)}`,
+    {
+      headers: {
+        "User-Agent": "SoundAtlasApp/1.0 (learning project)",
+      },
+      cache: "no-store",
+    }
+  );
+
+  if (!wikiRes.ok) {
+    return null;
+  }
+
+  const wikiData = (await wikiRes.json()) as WikipediaSummaryResponse;
+  if (!wikiData.extract) {
+    return null;
+  }
+
+  return {
+    bioSummary: getShortBio(wikiData.extract),
+    description: wikiData.description ?? "",
+    sourceUrl: wikiData.content_urls?.desktop?.page ?? "",
+  };
 }
 
 export async function GET(_: Request, context: Context) {
@@ -87,10 +158,7 @@ export async function GET(_: Request, context: Context) {
   );
 
   if (!artistRes.ok) {
-    return NextResponse.json(
-      { error: "Failed to fetch artist" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch artist" }, { status: 500 });
   }
 
   const artist = (await artistRes.json()) as ArtistResponse;
@@ -106,45 +174,21 @@ export async function GET(_: Request, context: Context) {
   );
 
   if (!albumsRes.ok) {
-    return NextResponse.json(
-      { error: "Failed to fetch albums" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch albums" }, { status: 500 });
   }
 
   const albumsData = (await albumsRes.json()) as AlbumsResponse;
-
-  let bioSummary = buildFallbackBio(artist);
-  const wikipediaTitle = getWikipediaTitle(artist.relations);
-
-  if (wikipediaTitle) {
-    const wikiRes = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikipediaTitle)}`,
-      {
-        headers: {
-          "User-Agent": "SoundAtlasApp/1.0 (learning project)",
-        },
-        cache: "no-store",
-      }
-    );
-
-    if (wikiRes.ok) {
-      const wikiData = (await wikiRes.json()) as WikipediaSummaryResponse;
-      if (wikiData.extract) {
-        bioSummary = getShortBio(wikiData.extract);
-      }
-    }
-  }
+  const wikiSummary = await fetchWikipediaSummary(artist);
 
   return NextResponse.json({
     artist: {
       id: artist.id,
       name: artist.name,
-      type: artist.type,
       country: artist.country,
       origin: artist["begin-area"]?.name || artist.area?.name || artist.country,
-      disambiguation: artist.disambiguation,
-      bioSummary,
+      description: wikiSummary?.description ?? "",
+      bioSummary: wikiSummary?.bioSummary ?? buildFallbackBio(artist),
+      sourceUrl: wikiSummary?.sourceUrl ?? "",
     },
     albums: (albumsData["release-groups"] || []).map((album) => ({
       id: album.id,
