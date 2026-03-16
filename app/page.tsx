@@ -7,6 +7,7 @@ import {
   getProfile,
   getPublicRecentReviews,
   SavedReview,
+  saveProfile,
   SOCIAL_STORAGE_EVENT,
 } from "@/lib/social";
 
@@ -182,6 +183,10 @@ export default function Home() {
   const [featuredGroupIndex, setFeaturedGroupIndex] = useState(0);
   const [genreStartIndex, setGenreStartIndex] = useState(0);
   const [headline, setHeadline] = useState("Good evening");
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false);
+  const [signupName, setSignupName] = useState("");
+  const [signupUsername, setSignupUsername] = useState("");
+  const [signupError, setSignupError] = useState("");
 
   async function searchArtist() {
     if (!query.trim()) return;
@@ -210,6 +215,12 @@ export default function Home() {
       const preferredName = profile.displayName.trim() || profile.username.trim();
       const nextGreeting = getGreeting(new Date().getHours());
       setHeadline(preferredName ? `${nextGreeting} ${preferredName}` : nextGreeting);
+
+      const exploreFirst = window.sessionStorage.getItem("soundatlas-explore-first");
+      const shouldPrompt = !preferredName && exploreFirst !== "true";
+      setShowSignupPrompt(shouldPrompt);
+      setSignupName(profile.displayName);
+      setSignupUsername(profile.username);
     }
 
     syncGreeting();
@@ -242,8 +253,89 @@ export default function Home() {
     return genreCollections[(genreStartIndex + offset) % genreCollections.length];
   });
 
+  function handleSignup() {
+    const trimmedName = signupName.trim();
+    const trimmedUsername = signupUsername.trim();
+
+    if (!trimmedName && !trimmedUsername) {
+      setSignupError("Add a name or username to keep going.");
+      return;
+    }
+
+    const currentProfile = getProfile();
+    saveProfile({
+      ...currentProfile,
+      displayName: trimmedName || currentProfile.displayName,
+      username: trimmedUsername || currentProfile.username,
+    });
+    window.sessionStorage.removeItem("soundatlas-explore-first");
+    setSignupError("");
+    setShowSignupPrompt(false);
+  }
+
+  function handleExploreFirst() {
+    window.sessionStorage.setItem("soundatlas-explore-first", "true");
+    setShowSignupPrompt(false);
+  }
+
   return (
     <main className="min-h-screen pb-12 pt-6 text-[var(--text-main)] md:pb-16 md:pt-8">
+      {showSignupPrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,8,9,0.72)] px-4 backdrop-blur-md">
+          <div className="hero-panel w-full max-w-xl p-6 md:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="kicker">Join SoundAtlas</p>
+                <h2 className="mt-3 text-3xl font-bold md:text-4xl">
+                  Start your profile before you dive in.
+                </h2>
+              </div>
+              <button type="button" onClick={handleExploreFirst} className="ghost-button px-4 py-2">
+                x Explore first
+              </button>
+            </div>
+
+            <p className="mt-4 max-w-lg text-sm leading-7 text-[var(--text-soft)] md:text-base">
+              Pick a display name or username so your ratings, reviews, and follows feel like they belong to you from the start.
+            </p>
+
+            <div className="mt-6 grid gap-4">
+              <input
+                value={signupName}
+                onChange={(e) => {
+                  setSignupName(e.target.value);
+                  setSignupError("");
+                }}
+                placeholder="Display name"
+                className="app-input"
+              />
+              <input
+                value={signupUsername}
+                onChange={(e) => {
+                  setSignupUsername(e.target.value);
+                  setSignupError("");
+                }}
+                placeholder="Username"
+                className="app-input"
+              />
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={handleSignup} className="solid-button">
+                Create account
+              </button>
+              <button type="button" onClick={handleExploreFirst} className="ghost-button">
+                Explore first
+              </button>
+            </div>
+
+            {signupError ? (
+              <p className="mt-3 text-sm text-[#ff9f86]">{signupError}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="page-shell">
         <header className="topbar">
           <div>
