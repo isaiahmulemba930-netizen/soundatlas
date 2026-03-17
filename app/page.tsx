@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { genreCollections } from "@/lib/genre-catalog";
+import { supabase } from "@/lib/supabase";
 import {
-  getProfile,
   getPublicRecentReviews,
   SavedReview,
-  saveProfile,
   SOCIAL_STORAGE_EVENT,
 } from "@/lib/social";
 
@@ -31,9 +31,14 @@ type FeaturedGroup = {
   albums: FeaturedAlbum[];
 };
 
+type AuthProfile = {
+  display_name: string | null;
+  username: string | null;
+};
+
 const featuredGroups: FeaturedGroup[] = [
   {
-    title: "Most Revisited This Window",
+    title: "Most Revisited This week",
     subtitle: "Albums that keep ending up back in rotation, whether people mean to or not.",
     albums: [
       {
@@ -172,21 +177,160 @@ const featuredGroups: FeaturedGroup[] = [
 
 function getGreeting(hour: number) {
   if (hour >= 5 && hour < 12) return "Good morning";
-  if (hour >= 12 && hour < 18) return "Good afternoon";
+  if (hour >= 12 && hour < 18) return "Good evening";
   return "Good evening";
 }
-
 export default function Home() {
+  async function loadAuthenticatedState(sessionOverride?: Session | null) {
+    const session =
+      sessionOverride ??
+      (await supabase.auth.getSession()).data.session;
+
+    const user = session?.user ?? null;
+    setLoggedInUser(user);
+
+    if (!user) {
+      setCurrentProfile(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("display_name, username")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      setSignupError(error.message);
+      setCurrentProfile(null);
+      return;
+    }
+
+    setCurrentProfile(data);
+  }
+
+  async function handleSupabaseSignup() {
+    setIsSigningUp(true);
+    setSignupError("");
+
+    if (!signupEmail.trim() || !signupPassword.trim()) {
+      setSignupError("Enter an email and password to create your account.");
+      setIsSigningUp(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: signupEmail,
+        password: signupPassword,
+      });
+
+      if (error) {
+        setSignupError(error.message);
+        return;
+      }
+
+      if (!data.user) {
+        setSignupError("Account created, but no user was returned.");
+        return;
+      }
+
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        {
+          user_id: data.user.id,
+          username: signupUsername.trim() || null,
+          display_name: signupName.trim() || null,
+        },
+        { onConflict: "user_id" }
+      );
+
+      if (profileError) {
+        setSignupError(profileError.message);
+        return;
+      }
+
+      setShowSignupPrompt(true);
+      setShowEmailConfirmation(true);
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : "Unable to sign up right now.");
+    } finally {
+      setIsSigningUp(false);
+    }
+  }
+
+  async function handleSupabaseLogin() {
+    setIsLoggingIn(true);
+    setSignupError("");
+
+    if (!signupEmail.trim() || !signupPassword.trim()) {
+      setSignupError("Enter your email and password to log in.");
+      setIsLoggingIn(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: signupEmail,
+        password: signupPassword,
+      });
+
+      if (error) {
+        setSignupError(error.message);
+        return;
+      }
+
+      await loadAuthenticatedState(data.session ?? null);
+      setShowEmailConfirmation(false);
+      setShowSignupPrompt(false);
+      setShowWelcomeModal(false);
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : "Unable to log in right now.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
+  async function handleSignOut() {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setSignupError(error.message);
+    } else {
+      setLoggedInUser(null);
+      setCurrentProfile(null);
+      setShowEmailConfirmation(false);
+      setShowWelcomeModal(true);
+      setShowSignupPrompt(false);
+      setAuthMode("signup");
+      setSignupError("");
+      setSignupName("");
+      setSignupUsername("");
+      setSignupEmail("");
+      setSignupPassword("");
+      window.localStorage.removeItem("soundatlas-profile");
+      window.sessionStorage.removeItem("soundatlas-explore-first");
+    }
+  }
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ArtistResult[]>([]);
   const [recentActivity, setRecentActivity] = useState<SavedReview[]>([]);
   const [featuredGroupIndex, setFeaturedGroupIndex] = useState(0);
   const [genreStartIndex, setGenreStartIndex] = useState(0);
   const [headline, setHeadline] = useState("Good evening");
+  const [showWelcomeModal, setShowWelcomeModal] = useState(true);
   const [showSignupPrompt, setShowSignupPrompt] = useState(false);
   const [signupName, setSignupName] = useState("");
   const [signupUsername, setSignupUsername] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
   const [signupError, setSignupError] = useState("");
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<Session["user"] | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<AuthProfile | null>(null);
+  const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
 
   async function searchArtist() {
     if (!query.trim()) return;
@@ -210,17 +354,63 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function syncSession() {
+      if (!isMounted) return;
+
+      await loadAuthenticatedState();
+
+      if (!isMounted) return;
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        setShowWelcomeModal(false);
+        setShowSignupPrompt(false);
+        setShowEmailConfirmation(false);
+      }
+    }
+
+    syncSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+
+      if (session?.user) {
+        setShowWelcomeModal(false);
+        setShowSignupPrompt(false);
+        setShowEmailConfirmation(false);
+      } else {
+        setCurrentProfile(null);
+      }
+
+      void loadAuthenticatedState(session);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     function syncGreeting() {
-      const profile = getProfile();
-      const preferredName = profile.displayName.trim() || profile.username.trim();
+      const preferredName =
+        currentProfile?.display_name?.trim() ||
+        currentProfile?.username?.trim() ||
+        loggedInUser?.email?.trim() ||
+        "";
       const nextGreeting = getGreeting(new Date().getHours());
       setHeadline(preferredName ? `${nextGreeting} ${preferredName}` : nextGreeting);
 
       const exploreFirst = window.sessionStorage.getItem("soundatlas-explore-first");
-      const shouldPrompt = !preferredName && exploreFirst !== "true";
+      const shouldPrompt = !loggedInUser && !showEmailConfirmation && exploreFirst !== "true";
       setShowSignupPrompt(shouldPrompt);
-      setSignupName(profile.displayName);
-      setSignupUsername(profile.username);
     }
 
     syncGreeting();
@@ -231,7 +421,7 @@ export default function Home() {
       window.removeEventListener(SOCIAL_STORAGE_EVENT, syncGreeting);
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [currentProfile, loggedInUser, showEmailConfirmation]);
 
   useEffect(() => {
     function syncFeaturedGroup() {
@@ -253,26 +443,6 @@ export default function Home() {
     return genreCollections[(genreStartIndex + offset) % genreCollections.length];
   });
 
-  function handleSignup() {
-    const trimmedName = signupName.trim();
-    const trimmedUsername = signupUsername.trim();
-
-    if (!trimmedName && !trimmedUsername) {
-      setSignupError("Add a name or username to keep going.");
-      return;
-    }
-
-    const currentProfile = getProfile();
-    saveProfile({
-      ...currentProfile,
-      displayName: trimmedName || currentProfile.displayName,
-      username: trimmedUsername || currentProfile.username,
-    });
-    window.sessionStorage.removeItem("soundatlas-explore-first");
-    setSignupError("");
-    setShowSignupPrompt(false);
-  }
-
   function handleExploreFirst() {
     window.sessionStorage.setItem("soundatlas-explore-first", "true");
     setShowSignupPrompt(false);
@@ -280,14 +450,85 @@ export default function Home() {
 
   return (
     <main className="min-h-screen pb-12 pt-6 text-[var(--text-main)] md:pb-16 md:pt-8">
+      {showWelcomeModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,8,9,0.72)] px-4 backdrop-blur-md">
+          <div className="hero-panel w-full max-w-xl p-6 md:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="kicker">Welcome to SoundAtlas</p>
+                <h2 className="mt-3 text-3xl font-bold md:text-4xl">Discover music with your friends</h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setShowWelcomeModal(false)}
+                className="ghost-button px-3 py-2"
+              >
+                x
+              </button>
+            </div>
+            <p className="mt-4 max-w-lg text-sm leading-7 text-[var(--text-soft)] md:text-base">
+              Join SoundAtlas to rate music, build your profile, and connect with others.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWelcomeModal(false);
+                  setAuthMode("signup");
+                  setShowEmailConfirmation(false);
+                  setSignupError("");
+                  setShowSignupPrompt(true);
+                }}
+                className="app-button"
+                disabled={isSigningUp || isLoggingIn}
+              >
+                Sign up
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWelcomeModal(false);
+                  setAuthMode("login");
+                  setShowEmailConfirmation(false);
+                  setSignupError("");
+                  setShowSignupPrompt(true);
+                }}
+                className="ghost-button"
+                disabled={isSigningUp || isLoggingIn}
+              >
+                Log in
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWelcomeModal(false)}
+                className="text-sm text-[var(--text-soft)] underline hover:text-[var(--text-main)]"
+              >
+                Explore first
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {showSignupPrompt ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,8,9,0.72)] px-4 backdrop-blur-md">
           <div className="hero-panel w-full max-w-xl p-6 md:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="kicker">Join SoundAtlas</p>
+                <p className="kicker">
+                  {showEmailConfirmation
+                    ? "Almost there"
+                    : authMode === "login"
+                      ? "Welcome back"
+                      : "Join SoundAtlas"}
+                </p>
                 <h2 className="mt-3 text-3xl font-bold md:text-4xl">
-                  Start your profile before you dive in.
+                  {showEmailConfirmation
+                    ? "Check your email to confirm your account."
+                    : authMode === "login"
+                      ? "Log in to keep listening with your account."
+                      : "Start your profile before you dive in."}
                 </h2>
               </div>
               <button type="button" onClick={handleExploreFirst} className="ghost-button px-4 py-2">
@@ -296,34 +537,102 @@ export default function Home() {
             </div>
 
             <p className="mt-4 max-w-lg text-sm leading-7 text-[var(--text-soft)] md:text-base">
-              Pick a display name or username so your ratings, reviews, and follows feel like they belong to you from the start.
+              {showEmailConfirmation
+                ? "We sent a confirmation link to your email. After confirming, come back here and log in."
+                : authMode === "login"
+                  ? "Use the same email and password you signed up with to pick up where you left off."
+                  : "Pick a display name or username so your ratings, reviews, and follows feel like they belong to you from the start."}
             </p>
 
-            <div className="mt-6 grid gap-4">
-              <input
-                value={signupName}
-                onChange={(e) => {
-                  setSignupName(e.target.value);
-                  setSignupError("");
-                }}
-                placeholder="Display name"
-                className="app-input"
-              />
-              <input
-                value={signupUsername}
-                onChange={(e) => {
-                  setSignupUsername(e.target.value);
-                  setSignupError("");
-                }}
-                placeholder="Username"
-                className="app-input"
-              />
-            </div>
+            {showEmailConfirmation ? null : (
+              <div className="mt-6 grid gap-4">
+                <input
+                  value={signupName}
+                  onChange={(e) => {
+                    setSignupName(e.target.value);
+                    setSignupError("");
+                  }}
+                  placeholder="Display name"
+                  className="app-input"
+                />
+                <input
+                  value={signupUsername}
+                  onChange={(e) => {
+                    setSignupUsername(e.target.value);
+                    setSignupError("");
+                  }}
+                  placeholder="Username"
+                  className="app-input"
+                />
+                <input
+                  type="email"
+                  value={signupEmail}
+                  onChange={(e) => {
+                    setSignupEmail(e.target.value);
+                    setSignupError("");
+                  }}
+                  placeholder="Email"
+                  className="app-input"
+                />
+                <input
+                  type="password"
+                  value={signupPassword}
+                  onChange={(e) => {
+                    setSignupPassword(e.target.value);
+                    setSignupError("");
+                  }}
+                  placeholder="Password"
+                  className="app-input"
+                />
+              </div>
+            )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={handleSignup} className="solid-button">
-                Create account
-              </button>
+              {showEmailConfirmation ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setShowEmailConfirmation(false);
+                    setSignupError("");
+                  }}
+                  className="app-button"
+                  disabled={isLoggingIn}
+                >
+                  Go to Log in
+                </button>
+              ) : authMode === "login" ? (
+                <button
+                  type="button"
+                  onClick={handleSupabaseLogin}
+                  className="app-button"
+                  disabled={isLoggingIn || isSigningUp}
+                >
+                  {isLoggingIn ? "Logging in..." : "Log in"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSupabaseSignup}
+                  className="app-button"
+                  disabled={isSigningUp || isLoggingIn}
+                >
+                  {isSigningUp ? "Creating account..." : "Create account"}
+                </button>
+              )}
+              {!showEmailConfirmation ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode(authMode === "signup" ? "login" : "signup");
+                    setSignupError("");
+                  }}
+                  className="ghost-button"
+                  disabled={isSigningUp || isLoggingIn}
+                >
+                  {authMode === "signup" ? "Switch to Log in" : "Switch to Sign up"}
+                </button>
+              ) : null}
               <button type="button" onClick={handleExploreFirst} className="ghost-button">
                 Explore first
               </button>
@@ -346,6 +655,15 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
+            {loggedInUser ? (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="app-button"
+              >
+                Sign out
+              </button>
+            ) : null}
             <Link href="/profile" className="nav-link">
               Your Profile
             </Link>

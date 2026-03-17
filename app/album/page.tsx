@@ -42,7 +42,7 @@ export default function Home() {
     <main className="min-h-screen bg-black text-white p-8">
       <h1 className="text-4xl font-bold mb-3">SoundAtlas</h1>
       <p className="text-gray-400 mb-6">
-        Search any artist and load real music metadata.
+        Search for any artist and load real music metadata.
       </p>
 
       <form onSubmit={searchArtists} className="max-w-2xl mb-8">
