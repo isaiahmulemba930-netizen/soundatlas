@@ -1,62 +1,121 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  addSocialName,
   defaultProfile,
-  getProfile,
   getRatingStats,
   getRecentReviews,
-  getSocialGraph,
   ProfileData,
   SavedReview,
-  saveProfile,
   SOCIAL_STORAGE_EVENT,
-  removeSocialName,
 } from "@/lib/social";
+import {
+  getAuthenticatedUser,
+  getFollowers,
+  getFollowing,
+  getProfileByUserId,
+  profileRecordToProfileData,
+  PublicProfile,
+  updateOwnProfile,
+} from "@/lib/follows";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile);
   const [recentReviews, setRecentReviews] = useState<SavedReview[]>([]);
-  const [followers, setFollowers] = useState<string[]>([]);
-  const [following, setFollowing] = useState<string[]>([]);
-  const [followerInput, setFollowerInput] = useState("");
-  const [followingInput, setFollowingInput] = useState("");
+  const [followers, setFollowers] = useState<PublicProfile[]>([]);
+  const [following, setFollowing] = useState<PublicProfile[]>([]);
+  const [authUserId, setAuthUserId] = useState("");
+  const [socialError, setSocialError] = useState("");
+  const hasLoadedProfile = useRef(false);
 
   useEffect(() => {
-    function syncSocialState() {
-      setProfile(getProfile());
+    function syncReviewState() {
       setRecentReviews(getRecentReviews());
-
-      const graph = getSocialGraph();
-      setFollowers(graph.followers);
-      setFollowing(graph.following);
     }
 
-    syncSocialState();
-    window.addEventListener(SOCIAL_STORAGE_EVENT, syncSocialState);
+    syncReviewState();
+    window.addEventListener(SOCIAL_STORAGE_EVENT, syncReviewState);
 
     return () => {
-      window.removeEventListener(SOCIAL_STORAGE_EVENT, syncSocialState);
+      window.removeEventListener(SOCIAL_STORAGE_EVENT, syncReviewState);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSocialState() {
+      try {
+        const user = await getAuthenticatedUser();
+        if (!isMounted) return;
+
+        if (!user) {
+          setAuthUserId("");
+          setFollowers([]);
+          setFollowing([]);
+          return;
+        }
+
+        setAuthUserId(user.id);
+
+        const [dbProfile, nextFollowers, nextFollowing] = await Promise.all([
+          getProfileByUserId(user.id),
+          getFollowers(user.id),
+          getFollowing(user.id),
+        ]);
+
+        if (!isMounted) return;
+
+        setProfile(profileRecordToProfileData(dbProfile));
+        hasLoadedProfile.current = true;
+
+        setFollowers(nextFollowers);
+        setFollowing(nextFollowing);
+        setSocialError("");
+      } catch (error) {
+        if (!isMounted) return;
+
+        setSocialError(
+          error instanceof Error ? error.message : "Unable to load your social graph right now."
+        );
+      }
+    }
+
+    loadSocialState();
+    window.addEventListener(SOCIAL_STORAGE_EVENT, loadSocialState);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener(SOCIAL_STORAGE_EVENT, loadSocialState);
     };
   }, []);
 
   function updateField(field: keyof ProfileData, value: string) {
     const updated = { ...profile, [field]: value };
     setProfile(updated);
-    saveProfile(updated);
   }
 
-  function addFollower() {
-    addSocialName("followers", followerInput);
-    setFollowerInput("");
-  }
+  useEffect(() => {
+    if (!authUserId || !hasLoadedProfile.current) {
+      return;
+    }
 
-  function addFollowing() {
-    addSocialName("following", followingInput);
-    setFollowingInput("");
-  }
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        await updateOwnProfile(authUserId, profile);
+        setSocialError("");
+      } catch (error) {
+        setSocialError(
+          error instanceof Error ? error.message : "Unable to save your profile right now."
+        );
+      }
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [authUserId, profile]);
 
   const initials = useMemo(() => {
     const name = profile.displayName.trim();
@@ -174,27 +233,43 @@ export default function ProfilePage() {
             </div>
 
             <div className="app-panel p-6">
-              <p className="kicker">Social graph</p>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="kicker">Social graph</p>
+                  <p className="mt-3 text-sm text-[var(--text-soft)]">
+                    Real follower relationships now come from Supabase instead of local demo data.
+                  </p>
+                </div>
+                {authUserId && profile.username ? (
+                  <Link href={`/profile/${profile.username}`} className="ghost-button">
+                    View public profile
+                  </Link>
+                ) : null}
+              </div>
+
+              {socialError ? (
+                <p className="mt-4 text-sm text-[#ff9f86]">{socialError}</p>
+              ) : null}
+
               <div className="mt-5 grid gap-6 md:grid-cols-2">
                 <div>
                   <h3 className="text-xl font-bold">Followers</h3>
-                  <div className="field-shell mt-3">
-                    <input value={followerInput} onChange={(e) => setFollowerInput(e.target.value)} placeholder="Add follower username" />
-                    <button type="button" onClick={addFollower} className="solid-button px-4 py-3">
-                      Add
-                    </button>
-                  </div>
                   <div className="mt-4 space-y-2">
                     {followers.length === 0 ? (
                       <p className="text-sm text-[var(--text-muted)]">No followers yet.</p>
                     ) : (
-                      followers.map((name) => (
-                        <div key={name} className="flex items-center justify-between rounded-[1rem] border px-3 py-3" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
-                          <span>{name}</span>
-                          <button type="button" onClick={() => removeSocialName("followers", name)} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-main)]">
-                            Remove
-                          </button>
-                        </div>
+                      followers.map((user) => (
+                        <Link
+                          key={user.user_id}
+                          href={user.username ? `/profile/${user.username}` : "/profile"}
+                          className="flex items-center justify-between rounded-[1rem] border px-3 py-3"
+                          style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
+                        >
+                          <span>{user.display_name || user.username || "Unknown user"}</span>
+                          <span className="text-sm text-[var(--text-muted)]">
+                            @{user.username || "user"}
+                          </span>
+                        </Link>
                       ))
                     )}
                   </div>
@@ -202,23 +277,22 @@ export default function ProfilePage() {
 
                 <div>
                   <h3 className="text-xl font-bold">Following</h3>
-                  <div className="field-shell mt-3">
-                    <input value={followingInput} onChange={(e) => setFollowingInput(e.target.value)} placeholder="Add following username" />
-                    <button type="button" onClick={addFollowing} className="solid-button px-4 py-3">
-                      Add
-                    </button>
-                  </div>
                   <div className="mt-4 space-y-2">
                     {following.length === 0 ? (
                       <p className="text-sm text-[var(--text-muted)]">You are not following anyone yet.</p>
                     ) : (
-                      following.map((name) => (
-                        <div key={name} className="flex items-center justify-between rounded-[1rem] border px-3 py-3" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
-                          <span>{name}</span>
-                          <button type="button" onClick={() => removeSocialName("following", name)} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-main)]">
-                            Remove
-                          </button>
-                        </div>
+                      following.map((user) => (
+                        <Link
+                          key={user.user_id}
+                          href={user.username ? `/profile/${user.username}` : "/profile"}
+                          className="flex items-center justify-between rounded-[1rem] border px-3 py-3"
+                          style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
+                        >
+                          <span>{user.display_name || user.username || "Unknown user"}</span>
+                          <span className="text-sm text-[var(--text-muted)]">
+                            @{user.username || "user"}
+                          </span>
+                        </Link>
                       ))
                     )}
                   </div>
