@@ -112,6 +112,19 @@ export async function isFollowingUser(viewerId: string, targetUserId: string) {
   return Boolean(data);
 }
 
+export async function areUsersMutualFollowers(firstUserId: string, secondUserId: string) {
+  if (!firstUserId || !secondUserId || firstUserId === secondUserId) {
+    return false;
+  }
+
+  const [firstFollowsSecond, secondFollowsFirst] = await Promise.all([
+    isFollowingUser(firstUserId, secondUserId),
+    isFollowingUser(secondUserId, firstUserId),
+  ]);
+
+  return firstFollowsSecond && secondFollowsFirst;
+}
+
 async function getProfilesForUserIds(userIds: string[]) {
   if (userIds.length === 0) return [] as PublicProfile[];
 

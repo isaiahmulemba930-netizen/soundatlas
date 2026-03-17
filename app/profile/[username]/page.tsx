@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import {
+  areUsersMutualFollowers,
   followUser,
   getAuthenticatedUser,
   getFollowCounts,
@@ -15,6 +16,7 @@ import {
   PublicProfile,
   unfollowUser,
 } from "@/lib/follows";
+import { getOrCreateDirectConversation } from "@/lib/messages";
 
 export default function PublicProfilePage() {
   const params = useParams<{ username: string }>();
@@ -28,6 +30,8 @@ export default function PublicProfilePage() {
   const [following, setFollowing] = useState<PublicProfile[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isUpdatingFollow, setIsUpdatingFollow] = useState(false);
+  const [canMessage, setCanMessage] = useState(false);
+  const [isOpeningMessage, setIsOpeningMessage] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -62,11 +66,14 @@ export default function PublicProfilePage() {
 
         setProfile(targetProfile);
 
-        const [counts, nextFollowers, nextFollowing, viewerFollows] = await Promise.all([
+        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow] = await Promise.all([
           getFollowCounts(targetProfile.user_id),
           getFollowers(targetProfile.user_id),
           getFollowing(targetProfile.user_id),
           currentViewer ? isFollowingUser(currentViewer.id, targetProfile.user_id) : Promise.resolve(false),
+          currentViewer
+            ? areUsersMutualFollowers(currentViewer.id, targetProfile.user_id)
+            : Promise.resolve(false),
         ]);
 
         if (!isMounted) return;
@@ -76,6 +83,7 @@ export default function PublicProfilePage() {
         setFollowers(nextFollowers);
         setFollowing(nextFollowing);
         setIsFollowing(viewerFollows);
+        setCanMessage(mutualFollow);
         setError("");
       } catch (loadError) {
         if (!isMounted) return;
@@ -142,6 +150,7 @@ export default function PublicProfilePage() {
       setFollowerCount(counts.followerCount);
       setFollowingCount(counts.followingCount);
       setFollowers(nextFollowers);
+      setCanMessage(await areUsersMutualFollowers(viewer.id, profile.user_id));
     } catch (followError) {
       setIsFollowing(!nextIsFollowing);
       setFollowerCount((count) => Math.max(0, count + (nextIsFollowing ? -1 : 1)));
@@ -152,6 +161,26 @@ export default function PublicProfilePage() {
       );
     } finally {
       setIsUpdatingFollow(false);
+    }
+  }
+
+  async function handleMessageClick() {
+    if (!viewer || !profile) return;
+
+    setIsOpeningMessage(true);
+    setError("");
+
+    try {
+      const conversation = await getOrCreateDirectConversation(profile.user_id);
+      window.location.href = `/messages/${conversation.id}`;
+    } catch (messageError) {
+      setError(
+        messageError instanceof Error
+          ? messageError.message
+          : "Unable to open this conversation right now."
+      );
+    } finally {
+      setIsOpeningMessage(false);
     }
   }
 
@@ -171,14 +200,26 @@ export default function PublicProfilePage() {
             </p>
           </div>
           {profile && !isOwnProfile ? (
-            <button
-              type="button"
-              onClick={handleFollowToggle}
-              disabled={isUpdatingFollow}
-              className="solid-button"
-            >
-              {isUpdatingFollow ? "Updating..." : isFollowing ? "Unfollow" : "Follow"}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleFollowToggle}
+                disabled={isUpdatingFollow}
+                className="solid-button"
+              >
+                {isUpdatingFollow ? "Updating..." : isFollowing ? "Unfollow" : "Follow"}
+              </button>
+              {viewer && canMessage ? (
+                <button
+                  type="button"
+                  onClick={handleMessageClick}
+                  disabled={isOpeningMessage}
+                  className="ghost-button"
+                >
+                  {isOpeningMessage ? "Opening..." : "Message"}
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

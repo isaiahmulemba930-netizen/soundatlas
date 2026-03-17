@@ -688,6 +688,11 @@ export default function Home() {
 
           <div className="flex items-center gap-3">
             {loggedInUser ? (
+              <Link href="/messages" className="nav-link">
+                Messages
+              </Link>
+            ) : null}
+            {loggedInUser ? (
               <button
                 type="button"
                 onClick={handleSignOut}

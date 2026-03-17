@@ -139,6 +139,11 @@ export default function ProfilePage() {
             </Link>
             <h1 className="mt-4 text-4xl font-bold md:text-6xl">Your profile</h1>
           </div>
+          {authUserId ? (
+            <Link href="/messages" className="nav-link">
+              Messages
+            </Link>
+          ) : null}
         </div>
 
         <section className="hero-panel mb-6 p-6 md:p-8">
