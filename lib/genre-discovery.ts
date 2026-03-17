@@ -258,7 +258,7 @@ const discoveryFamilies = discoverySeeds.map((family) => {
       aliases: Array.from(
         new Set([genre.title, ...(genre.aliases ?? [])].map((alias) => normalizeGenreName(alias)))
       ),
-      catalogSlug: genre.catalogSlug ?? family.catalogSlug ?? null,
+      catalogSlug: slug,
     });
   });
 

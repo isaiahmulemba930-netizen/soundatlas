@@ -1057,11 +1057,9 @@ export default function Home() {
                       {activeDiscoveryGenre.description}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {activeDiscoveryGenre.catalogSlug ? (
-                        <Link href={`/catalog/${activeDiscoveryGenre.catalogSlug}`} className="app-button">
-                          Open catalog lane
-                        </Link>
-                      ) : null}
+                      <Link href={`/catalog/${activeDiscoveryGenre.slug}`} className="app-button">
+                        Open catalog lane
+                      </Link>
                       <button
                         type="button"
                         onClick={() => setActiveDiscoveryFamily(activeDiscoveryGenre.familySlug)}
