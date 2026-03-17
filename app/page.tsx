@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { genreCollections } from "@/lib/genre-catalog";
+import {
+  discoveryGenreFamilies,
+  filterDiscoveryFamilies,
+  getEditorialFallbackGenres,
+} from "@/lib/genre-discovery";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import {
   getPublicRecentReviews,
@@ -34,6 +38,22 @@ type FeaturedGroup = {
 type AuthProfile = {
   display_name: string | null;
   username: string | null;
+};
+
+type TrendingGenreCard = {
+  slug: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  signal: string;
+};
+
+type TrendingGenresResponse = {
+  genres: TrendingGenreCard[];
+  mode: "live-derived" | "fallback";
+  sourceSummary: string;
+  refreshedAt: string;
+  windowMinutes: number;
 };
 
 const featuredGroups: FeaturedGroup[] = [
@@ -180,6 +200,17 @@ function getGreeting(hour: number) {
   if (hour >= 12 && hour < 18) return "Good evening";
   return "Good evening";
 }
+
+function buildEditorialFallbackCards(): TrendingGenreCard[] {
+  return getEditorialFallbackGenres().map((collection) => ({
+    slug: collection.slug,
+    title: collection.title,
+    subtitle: `${collection.subtitle} This lane is standing in until the next live chart refresh completes.`,
+    href: `/catalog/${collection.slug}`,
+    signal: "Editorial standby",
+  }));
+}
+
 export default function Home() {
   function getSupabaseClient() {
     if (!supabase || !isSupabaseConfigured) {
@@ -341,7 +372,6 @@ export default function Home() {
   const [results, setResults] = useState<ArtistResult[]>([]);
   const [recentActivity, setRecentActivity] = useState<SavedReview[]>([]);
   const [featuredGroupIndex, setFeaturedGroupIndex] = useState(0);
-  const [genreStartIndex, setGenreStartIndex] = useState(0);
   const [headline, setHeadline] = useState("Good evening");
   const [showWelcomeModal, setShowWelcomeModal] = useState(true);
   const [showSignupPrompt, setShowSignupPrompt] = useState(false);
@@ -356,6 +386,16 @@ export default function Home() {
   const [loggedInUser, setLoggedInUser] = useState<Session["user"] | null>(null);
   const [currentProfile, setCurrentProfile] = useState<AuthProfile | null>(null);
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
+  const [featuredGenres, setFeaturedGenres] = useState<TrendingGenreCard[]>(buildEditorialFallbackCards);
+  const [genreTrendMode, setGenreTrendMode] = useState<"live-derived" | "fallback">("fallback");
+  const [genreTrendSummary, setGenreTrendSummary] = useState(
+    "Refreshing from global album charts every 30 minutes."
+  );
+  const [discoveryQuery, setDiscoveryQuery] = useState("");
+  const [activeDiscoveryFamily, setActiveDiscoveryFamily] = useState("all");
+  const [activeDiscoveryGenreSlug, setActiveDiscoveryGenreSlug] = useState<string | null>(
+    discoveryGenreFamilies[0]?.genres[0]?.slug ?? null
+  );
 
   async function searchArtist() {
     if (!query.trim()) return;
@@ -459,7 +499,6 @@ export default function Home() {
     function syncFeaturedGroup() {
       const twoHourBucket = Math.floor(new Date().getTime() / (1000 * 60 * 60 * 2));
       setFeaturedGroupIndex(twoHourBucket % featuredGroups.length);
-      setGenreStartIndex(twoHourBucket % genreCollections.length);
     }
 
     syncFeaturedGroup();
@@ -471,9 +510,68 @@ export default function Home() {
   }, []);
 
   const currentFeaturedGroup = featuredGroups[featuredGroupIndex];
-  const visibleGenres = Array.from({ length: 4 }, (_, offset) => {
-    return genreCollections[(genreStartIndex + offset) % genreCollections.length];
-  });
+  const filteredDiscoveryFamilies = filterDiscoveryFamilies(discoveryQuery, activeDiscoveryFamily);
+  const filteredDiscoveryGenres = filteredDiscoveryFamilies.flatMap((family) => family.genres);
+  const activeDiscoveryGenre =
+    filteredDiscoveryGenres.find((genre) => genre.slug === activeDiscoveryGenreSlug) ??
+    filteredDiscoveryGenres[0] ??
+    null;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTrendingGenres() {
+      try {
+        const response = await fetch("/api/genre-trends");
+
+        if (!response.ok) {
+          throw new Error("Unable to load live genre trends.");
+        }
+
+        const payload = (await response.json()) as TrendingGenresResponse;
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (payload.genres.length === 5) {
+          setFeaturedGenres(payload.genres);
+        }
+
+        setGenreTrendMode(payload.mode);
+        setGenreTrendSummary(payload.sourceSummary);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setFeaturedGenres(buildEditorialFallbackCards());
+        setGenreTrendMode("fallback");
+        setGenreTrendSummary(
+          "Live chart data is temporarily unavailable, so this lane is using the documented editorial fallback set."
+        );
+      }
+    }
+
+    void loadTrendingGenres();
+    const intervalId = window.setInterval(loadTrendingGenres, 1000 * 60 * 30);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (filteredDiscoveryGenres.length === 0) {
+      setActiveDiscoveryGenreSlug(null);
+      return;
+    }
+
+    if (!filteredDiscoveryGenres.some((genre) => genre.slug === activeDiscoveryGenreSlug)) {
+      setActiveDiscoveryGenreSlug(filteredDiscoveryGenres[0].slug);
+    }
+  }, [activeDiscoveryGenreSlug, filteredDiscoveryGenres]);
 
   function handleExploreFirst() {
     window.sessionStorage.setItem("soundatlas-explore-first", "true");
@@ -860,30 +958,178 @@ export default function Home() {
             <div>
               <p className="kicker">Discovery lanes</p>
               <h3 className="section-heading mt-2 font-bold">Browse by genre, not by menu.</h3>
+              <p className="mt-3 max-w-3xl text-[var(--text-soft)]">{genreTrendSummary}</p>
             </div>
+            <p
+              className="hidden rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)] md:inline-flex"
+              style={{ borderColor: "var(--border-main)" }}
+            >
+              {genreTrendMode === "live-derived" ? "Live-derived" : "Fallback"} · 30 min refresh
+            </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {visibleGenres.map((genre, index) => (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {featuredGenres.map((genre, index) => (
               <Link
                 key={genre.slug}
-                href={`/catalog/${genre.slug}`}
+                href={genre.href}
                 className="editorial-panel p-5"
                 style={{
                   background:
-                    index % 2 === 0
+                    index % 3 === 0
                       ? "linear-gradient(180deg, rgba(30,215,96,0.08), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
-                      : "linear-gradient(180deg, rgba(232,176,75,0.08), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
+                      : index % 3 === 1
+                        ? "linear-gradient(180deg, rgba(232,176,75,0.08), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
+                        : "linear-gradient(180deg, rgba(105,162,255,0.09), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
                 }}
               >
                 <p className="text-2xl font-bold">{genre.title}</p>
                 <p className="mt-3 text-sm leading-6 text-[var(--text-soft)]">{genre.subtitle}</p>
                 <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  5 essential albums
+                  {genre.signal}
                 </p>
                 <p className="mt-4 text-sm font-semibold text-[var(--accent-green)]">Open catalog</p>
               </Link>
             ))}
+          </div>
+        </section>
+
+        <section className="mb-6">
+          <div className="mb-4">
+            <p className="kicker">Discovery</p>
+            <h3 className="section-heading mt-2 font-bold">Discover by genre</h3>
+            <p className="mt-3 max-w-3xl text-[var(--text-soft)]">
+              Explore a deeper genre library organized into clear families, cleaned for duplicates, and built for quick scanning instead of endless dumping.
+            </p>
+          </div>
+
+          <div className="app-panel p-6 md:p-7">
+            <div className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm text-[var(--text-soft)]" htmlFor="discovery-genre-search">
+                    Search the genre library
+                  </label>
+                  <input
+                    id="discovery-genre-search"
+                    value={discoveryQuery}
+                    onChange={(event) => setDiscoveryQuery(event.target.value)}
+                    placeholder="Search genres, scenes, or styles..."
+                    className="app-input"
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-3 text-sm text-[var(--text-soft)]">Filter by family</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveDiscoveryFamily("all")}
+                      className={activeDiscoveryFamily === "all" ? "app-button" : "ghost-button"}
+                    >
+                      All genres
+                    </button>
+                    {discoveryGenreFamilies.map((family) => (
+                      <button
+                        key={family.slug}
+                        type="button"
+                        onClick={() => setActiveDiscoveryFamily(family.slug)}
+                        className={activeDiscoveryFamily === family.slug ? "app-button" : "ghost-button"}
+                      >
+                        {family.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {activeDiscoveryGenre ? (
+                  <div
+                    className="rounded-[1.4rem] border p-5"
+                    style={{
+                      borderColor: "var(--border-main)",
+                      background:
+                        "linear-gradient(180deg, rgba(30,215,96,0.07), rgba(255,255,255,0.02)), rgba(17,20,21,0.94)",
+                    }}
+                  >
+                    <p className="kicker">{activeDiscoveryGenre.familyTitle}</p>
+                    <p className="mt-3 text-2xl font-bold">{activeDiscoveryGenre.title}</p>
+                    <p className="mt-3 text-sm leading-6 text-[var(--text-soft)]">
+                      {activeDiscoveryGenre.description}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {activeDiscoveryGenre.catalogSlug ? (
+                        <Link href={`/catalog/${activeDiscoveryGenre.catalogSlug}`} className="app-button">
+                          Open catalog lane
+                        </Link>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setActiveDiscoveryFamily(activeDiscoveryGenre.familySlug)}
+                        className="ghost-button"
+                      >
+                        Stay in {activeDiscoveryGenre.familyTitle}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-[1.4rem] border p-5 text-sm text-[var(--text-soft)]"
+                    style={{
+                      borderColor: "var(--border-main)",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
+                  >
+                    No genres match that search yet. Try a broader term like pop, jazz, ambient, reggaeton, or shoegaze.
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                {filteredDiscoveryFamilies.map((family) => (
+                  <div
+                    key={family.slug}
+                    className="rounded-[1.35rem] border p-5"
+                    style={{
+                      borderColor: "var(--border-main)",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xl font-bold">{family.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
+                          {family.description}
+                        </p>
+                      </div>
+                      <span className="pill">{family.genres.length}</span>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {family.genres.map((genre) => (
+                        <button
+                          key={genre.slug}
+                          type="button"
+                          onClick={() => setActiveDiscoveryGenreSlug(genre.slug)}
+                          className="rounded-full border px-3 py-2 text-sm transition hover:-translate-y-0.5"
+                          style={{
+                            borderColor:
+                              activeDiscoveryGenre?.slug === genre.slug ? "rgba(30,215,96,0.65)" : "var(--border-main)",
+                            background:
+                              activeDiscoveryGenre?.slug === genre.slug
+                                ? "rgba(30,215,96,0.12)"
+                                : "rgba(255,255,255,0.02)",
+                            color:
+                              activeDiscoveryGenre?.slug === genre.slug ? "var(--text-main)" : "var(--text-soft)",
+                          }}
+                        >
+                          {genre.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
