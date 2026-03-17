@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { genreCollections } from "@/lib/genre-catalog";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import {
   getPublicRecentReviews,
   SavedReview,
@@ -181,10 +181,26 @@ function getGreeting(hour: number) {
   return "Good evening";
 }
 export default function Home() {
-  async function loadAuthenticatedState(sessionOverride?: Session | null) {
+  function getSupabaseClient() {
+    if (!supabase || !isSupabaseConfigured) {
+      setSignupError("Supabase is not configured for this deployment yet.");
+      return null;
+    }
+
+    return supabase;
+  }
+
+  const loadAuthenticatedState = useCallback(async (sessionOverride?: Session | null) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      setLoggedInUser(null);
+      setCurrentProfile(null);
+      return;
+    }
+
     const session =
       sessionOverride ??
-      (await supabase.auth.getSession()).data.session;
+      (await client.auth.getSession()).data.session;
 
     const user = session?.user ?? null;
     setLoggedInUser(user);
@@ -194,7 +210,7 @@ export default function Home() {
       return;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("profiles")
       .select("display_name, username")
       .eq("user_id", user.id)
@@ -207,11 +223,17 @@ export default function Home() {
     }
 
     setCurrentProfile(data);
-  }
+  }, []);
 
   async function handleSupabaseSignup() {
     setIsSigningUp(true);
     setSignupError("");
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setIsSigningUp(false);
+      return;
+    }
 
     if (!signupEmail.trim() || !signupPassword.trim()) {
       setSignupError("Enter an email and password to create your account.");
@@ -220,7 +242,7 @@ export default function Home() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await client.auth.signUp({
         email: signupEmail,
         password: signupPassword,
       });
@@ -235,7 +257,7 @@ export default function Home() {
         return;
       }
 
-      const { error: profileError } = await supabase.from("profiles").upsert(
+      const { error: profileError } = await client.from("profiles").upsert(
         {
           user_id: data.user.id,
           username: signupUsername.trim() || null,
@@ -262,6 +284,12 @@ export default function Home() {
     setIsLoggingIn(true);
     setSignupError("");
 
+    const client = getSupabaseClient();
+    if (!client) {
+      setIsLoggingIn(false);
+      return;
+    }
+
     if (!signupEmail.trim() || !signupPassword.trim()) {
       setSignupError("Enter your email and password to log in.");
       setIsLoggingIn(false);
@@ -269,7 +297,7 @@ export default function Home() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await client.auth.signInWithPassword({
         email: signupEmail,
         password: signupPassword,
       });
@@ -291,7 +319,12 @@ export default function Home() {
   }
 
   async function handleSignOut() {
-    const { error } = await supabase.auth.signOut();
+    const client = getSupabaseClient();
+    if (!client) {
+      return;
+    }
+
+    const { error } = await client.auth.signOut();
 
     if (error) {
       setSignupError(error.message);
@@ -354,6 +387,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoggedInUser(null);
+      setCurrentProfile(null);
+      return;
+    }
+
+    const client = supabase;
     let isMounted = true;
 
     async function syncSession() {
@@ -365,7 +405,7 @@ export default function Home() {
 
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await client.auth.getSession();
 
       if (session?.user) {
         setShowWelcomeModal(false);
@@ -378,7 +418,7 @@ export default function Home() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = client.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
 
       if (session?.user) {
@@ -396,7 +436,7 @@ export default function Home() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [loadAuthenticatedState]);
 
   useEffect(() => {
     function syncGreeting() {
