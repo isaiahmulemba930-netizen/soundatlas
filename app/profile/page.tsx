@@ -11,12 +11,15 @@ import {
   SOCIAL_STORAGE_EVENT,
 } from "@/lib/social";
 import {
+  followUser,
   getAuthenticatedUser,
   getFollowers,
   getFollowing,
   getProfileByUserId,
   profileRecordToProfileData,
   PublicProfile,
+  searchProfiles,
+  unfollowUser,
   updateOwnProfile,
 } from "@/lib/follows";
 
@@ -26,8 +29,26 @@ export default function ProfilePage() {
   const [followers, setFollowers] = useState<PublicProfile[]>([]);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
   const [authUserId, setAuthUserId] = useState("");
+  const [authUser, setAuthUser] = useState<Awaited<ReturnType<typeof getAuthenticatedUser>>>(null);
   const [socialError, setSocialError] = useState("");
+  const [peopleQuery, setPeopleQuery] = useState("");
+  const [peopleResults, setPeopleResults] = useState<PublicProfile[]>([]);
+  const [isSearchingPeople, setIsSearchingPeople] = useState(false);
+  const [activeFollowUserId, setActiveFollowUserId] = useState("");
   const hasLoadedProfile = useRef(false);
+
+  async function refreshSocialStateForUser(userId: string) {
+    const [dbProfile, nextFollowers, nextFollowing] = await Promise.all([
+      getProfileByUserId(userId),
+      getFollowers(userId),
+      getFollowing(userId),
+    ]);
+
+    setProfile(profileRecordToProfileData(dbProfile));
+    hasLoadedProfile.current = true;
+    setFollowers(nextFollowers);
+    setFollowing(nextFollowing);
+  }
 
   useEffect(() => {
     function syncReviewState() {
@@ -51,27 +72,20 @@ export default function ProfilePage() {
         if (!isMounted) return;
 
         if (!user) {
+          setAuthUser(null);
           setAuthUserId("");
           setFollowers([]);
           setFollowing([]);
+          setPeopleResults([]);
           return;
         }
 
+        setAuthUser(user);
         setAuthUserId(user.id);
-
-        const [dbProfile, nextFollowers, nextFollowing] = await Promise.all([
-          getProfileByUserId(user.id),
-          getFollowers(user.id),
-          getFollowing(user.id),
-        ]);
 
         if (!isMounted) return;
 
-        setProfile(profileRecordToProfileData(dbProfile));
-        hasLoadedProfile.current = true;
-
-        setFollowers(nextFollowers);
-        setFollowing(nextFollowing);
+        await refreshSocialStateForUser(user.id);
         setSocialError("");
       } catch (error) {
         if (!isMounted) return;
@@ -116,6 +130,72 @@ export default function ProfilePage() {
       window.clearTimeout(timeoutId);
     };
   }, [authUserId, profile]);
+
+  useEffect(() => {
+    if (!authUserId) {
+      setPeopleResults([]);
+      return;
+    }
+
+    const trimmed = peopleQuery.trim();
+    if (!trimmed) {
+      setPeopleResults([]);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearchingPeople(true);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const results = await searchProfiles(trimmed, authUserId);
+        if (!isMounted) return;
+
+        setPeopleResults(results);
+      } catch (error) {
+        if (!isMounted) return;
+
+        setSocialError(
+          error instanceof Error ? error.message : "Unable to search for people right now."
+        );
+      } finally {
+        if (isMounted) {
+          setIsSearchingPeople(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [authUserId, peopleQuery]);
+
+  async function handleSearchFollowToggle(targetUserId: string, isCurrentlyFollowing: boolean) {
+    if (!authUser) {
+      setSocialError("Log in to follow people.");
+      return;
+    }
+
+    setActiveFollowUserId(targetUserId);
+    setSocialError("");
+
+    try {
+      if (isCurrentlyFollowing) {
+        await unfollowUser(authUser, targetUserId);
+      } else {
+        await followUser(authUser, targetUserId);
+      }
+
+      await refreshSocialStateForUser(authUser.id);
+    } catch (error) {
+      setSocialError(
+        error instanceof Error ? error.message : "Unable to update follow state right now."
+      );
+    } finally {
+      setActiveFollowUserId("");
+    }
+  }
 
   const initials = useMemo(() => {
     const name = profile.displayName.trim();
@@ -255,6 +335,62 @@ export default function ProfilePage() {
               {socialError ? (
                 <p className="mt-4 text-sm text-[#ff9f86]">{socialError}</p>
               ) : null}
+
+              <div className="mt-5">
+                <h3 className="text-xl font-bold">Find people</h3>
+                <div className="field-shell mt-3">
+                  <input
+                    value={peopleQuery}
+                    onChange={(e) => setPeopleQuery(e.target.value)}
+                    placeholder="Search by username or display name"
+                  />
+                </div>
+                <div className="mt-4 space-y-2">
+                  {isSearchingPeople ? (
+                    <p className="text-sm text-[var(--text-muted)]">Searching...</p>
+                  ) : peopleQuery.trim() && peopleResults.length === 0 ? (
+                    <p className="text-sm text-[var(--text-muted)]">No matching users found.</p>
+                  ) : (
+                    peopleResults.map((user) => {
+                      const isCurrentlyFollowing = following.some(
+                        (followedUser) => followedUser.user_id === user.user_id
+                      );
+
+                      return (
+                        <div
+                          key={user.user_id}
+                          className="flex items-center justify-between gap-4 rounded-[1rem] border px-3 py-3"
+                          style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
+                        >
+                          <Link
+                            href={user.username ? `/profile/${user.username}` : "/profile"}
+                            className="min-w-0 flex-1"
+                          >
+                            <p className="truncate font-semibold">
+                              {user.display_name || user.username || "Unknown user"}
+                            </p>
+                            <p className="mt-1 text-sm text-[var(--text-muted)]">
+                              @{user.username || "user"}
+                            </p>
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleSearchFollowToggle(user.user_id, isCurrentlyFollowing)}
+                            disabled={activeFollowUserId === user.user_id}
+                            className={isCurrentlyFollowing ? "ghost-button" : "solid-button"}
+                          >
+                            {activeFollowUserId === user.user_id
+                              ? "Updating..."
+                              : isCurrentlyFollowing
+                                ? "Unfollow"
+                                : "Follow"}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
 
               <div className="mt-5 grid gap-6 md:grid-cols-2">
                 <div>

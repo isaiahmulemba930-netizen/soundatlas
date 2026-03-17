@@ -70,6 +70,30 @@ export async function getProfileByUserId(userId: string) {
   return data as PublicProfile | null;
 }
 
+export async function searchProfiles(query: string, excludeUserId?: string) {
+  const trimmed = query.trim();
+  if (!trimmed) return [] as PublicProfile[];
+
+  const client = getSupabaseClient();
+  let request = client
+    .from("profiles")
+    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist")
+    .or(`username.ilike.%${trimmed}%,display_name.ilike.%${trimmed}%`)
+    .limit(8);
+
+  if (excludeUserId) {
+    request = request.neq("user_id", excludeUserId);
+  }
+
+  const { data, error } = await request;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as PublicProfile[];
+}
+
 export async function getFollowCounts(userId: string): Promise<FollowCounts> {
   const client = getSupabaseClient();
   const [{ count: followerCount, error: followersError }, { count: followingCount, error: followingError }] =
