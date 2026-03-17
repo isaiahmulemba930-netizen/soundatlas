@@ -245,6 +245,12 @@ export default function Home() {
       const { data, error } = await client.auth.signUp({
         email: signupEmail,
         password: signupPassword,
+        options: {
+          data: {
+            display_name: signupName.trim() || null,
+            username: signupUsername.trim() || null,
+          },
+        },
       });
 
       if (error) {
@@ -254,20 +260,6 @@ export default function Home() {
 
       if (!data.user) {
         setSignupError("Account created, but no user was returned.");
-        return;
-      }
-
-      const { error: profileError } = await client.from("profiles").upsert(
-        {
-          user_id: data.user.id,
-          username: signupUsername.trim() || null,
-          display_name: signupName.trim() || null,
-        },
-        { onConflict: "user_id" }
-      );
-
-      if (profileError) {
-        setSignupError(profileError.message);
         return;
       }
 
