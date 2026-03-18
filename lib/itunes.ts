@@ -21,6 +21,13 @@ type ItunesTrackResult = {
   releaseDate?: string;
   trackNumber?: number;
   trackName?: string;
+  trackTimeMillis?: number;
+};
+
+export type AlbumLookupTrack = {
+  title: string;
+  trackNumber: number | null;
+  durationMs: number | null;
 };
 
 export type AlbumLookup = {
@@ -29,7 +36,7 @@ export type AlbumLookup = {
   genre: string;
   releaseDate: string;
   artworkUrl: string;
-  tracks: string[];
+  tracks: AlbumLookupTrack[];
 };
 
 export type GenreSearchAlbum = {
@@ -140,7 +147,11 @@ export async function fetchAlbumLookup(artist: string, album: string): Promise<A
     const tracks = (lookupData.results ?? [])
       .filter((item) => item.wrapperType === "track" && item.trackName)
       .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      .map((item) => item.trackName as string);
+      .map((item) => ({
+        title: item.trackName as string,
+        trackNumber: item.trackNumber ?? null,
+        durationMs: item.trackTimeMillis ?? null,
+      }));
 
     return {
       title: match.collectionName,
@@ -183,7 +194,11 @@ export async function fetchAlbumLookupByCollectionId(collectionId: number): Prom
     const tracks = items
       .filter((item) => item.wrapperType === "track" && item.trackName)
       .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      .map((item) => item.trackName as string);
+      .map((item) => ({
+        title: item.trackName as string,
+        trackNumber: item.trackNumber ?? null,
+        durationMs: item.trackTimeMillis ?? null,
+      }));
 
     return {
       title: collection.collectionName,

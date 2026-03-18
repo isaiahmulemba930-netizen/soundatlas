@@ -17,6 +17,7 @@ import {
   unfollowUser,
 } from "@/lib/follows";
 import { getOrCreateDirectConversation } from "@/lib/messages";
+import { getPublicReviewsByUser, OwnedReview } from "@/lib/reviews";
 
 export default function PublicProfilePage() {
   const params = useParams<{ username: string }>();
@@ -28,6 +29,7 @@ export default function PublicProfilePage() {
   const [followingCount, setFollowingCount] = useState(0);
   const [followers, setFollowers] = useState<PublicProfile[]>([]);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
+  const [publicReviews, setPublicReviews] = useState<OwnedReview[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isUpdatingFollow, setIsUpdatingFollow] = useState(false);
   const [canMessage, setCanMessage] = useState(false);
@@ -66,7 +68,7 @@ export default function PublicProfilePage() {
 
         setProfile(targetProfile);
 
-        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow] = await Promise.all([
+        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow, reviews] = await Promise.all([
           getFollowCounts(targetProfile.user_id),
           getFollowers(targetProfile.user_id),
           getFollowing(targetProfile.user_id),
@@ -74,6 +76,7 @@ export default function PublicProfilePage() {
           currentViewer
             ? areUsersMutualFollowers(currentViewer.id, targetProfile.user_id)
             : Promise.resolve(false),
+          getPublicReviewsByUser(targetProfile.user_id, 10),
         ]);
 
         if (!isMounted) return;
@@ -82,6 +85,7 @@ export default function PublicProfilePage() {
         setFollowingCount(counts.followingCount);
         setFollowers(nextFollowers);
         setFollowing(nextFollowing);
+        setPublicReviews(reviews);
         setIsFollowing(viewerFollows);
         setCanMessage(mutualFollow);
         setError("");
@@ -115,6 +119,22 @@ export default function PublicProfilePage() {
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }, [profile]);
+
+  const publicRatingSummary = useMemo(() => {
+    const ratedReviews = publicReviews.filter((review) => typeof review.rating === "number" && review.rating > 0);
+    const averageRating =
+      ratedReviews.length > 0
+        ? ratedReviews.reduce((total, review) => total + (review.rating ?? 0), 0) / ratedReviews.length
+        : null;
+
+    return {
+      averageRating,
+      ratedCount: ratedReviews.length,
+      songCount: ratedReviews.filter((review) => review.entity_type === "song").length,
+      albumCount: ratedReviews.filter((review) => review.entity_type === "album").length,
+      artistCount: ratedReviews.filter((review) => review.entity_type === "artist").length,
+    };
+  }, [publicReviews]);
 
   async function handleFollowToggle() {
     if (!profile) return;
@@ -284,7 +304,7 @@ export default function PublicProfilePage() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
+        <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="app-panel p-6">
             <h2 className="text-2xl font-bold">Followers</h2>
             <div className="mt-4 space-y-2">
@@ -325,6 +345,82 @@ export default function PublicProfilePage() {
                     <span className="text-sm text-[var(--text-muted)]">
                       @{user.username || "user"}
                     </span>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="editorial-panel p-6">
+            <p className="kicker">Public reviews</p>
+            <h2 className="section-heading mt-3 font-bold">Shared ratings and reviews</h2>
+            <div className="mt-6 grid gap-3 md:grid-cols-4">
+              <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
+                <p className="kicker">Average rating</p>
+                <p className="mt-2 text-3xl font-bold">
+                  {publicRatingSummary.averageRating ? publicRatingSummary.averageRating.toFixed(1) : "--"}
+                </p>
+                <p className="mt-2 text-sm text-[var(--text-soft)]">Across public rated reviews</p>
+              </div>
+              <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
+                <p className="kicker">Songs rated</p>
+                <p className="mt-2 text-3xl font-bold">{publicRatingSummary.songCount}</p>
+                <p className="mt-2 text-sm text-[var(--text-soft)]">Public song ratings</p>
+              </div>
+              <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
+                <p className="kicker">Albums rated</p>
+                <p className="mt-2 text-3xl font-bold">{publicRatingSummary.albumCount}</p>
+                <p className="mt-2 text-sm text-[var(--text-soft)]">Public album ratings</p>
+              </div>
+              <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
+                <p className="kicker">Artists rated</p>
+                <p className="mt-2 text-3xl font-bold">{publicRatingSummary.artistCount}</p>
+                <p className="mt-2 text-sm text-[var(--text-soft)]">
+                  {publicRatingSummary.ratedCount} public ratings total
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 space-y-4">
+              {publicReviews.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">
+                  No public reviews yet.
+                </p>
+              ) : (
+                publicReviews.map((review) => (
+                  <Link
+                    key={review.id}
+                    href={`/reviews/${review.id}`}
+                    className="block rounded-[1.25rem] border p-4 transition hover:-translate-y-0.5"
+                    style={{
+                      borderColor: "var(--border-main)",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-semibold">
+                          {review.review_title || review.entity_name}
+                        </h3>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <p className="text-sm text-[var(--text-muted)]">
+                            {review.entity_type === "song"
+                              ? `Song review${review.entity_subtitle ? ` on ${review.entity_subtitle}` : ""}`
+                              : review.entity_type === "album"
+                                ? review.entity_subtitle || "Album review"
+                                : review.entity_subtitle || "Artist review"}
+                          </p>
+                          <span className="pill">public</span>
+                        </div>
+                      </div>
+                      <div className="text-right text-xs text-[var(--text-muted)]">
+                        <p>{review.rating ? `${review.rating.toFixed(1)} / 5` : "No score"}</p>
+                        <p className="mt-1">{new Date(review.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
+                      {review.review_text || "No review text."}
+                    </p>
                   </Link>
                 ))
               )}

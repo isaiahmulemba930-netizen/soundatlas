@@ -1,40 +1,22 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
-import { buildAlbumContextSections, buildAlbumWhyItShowsUp } from "@/lib/album-context";
-import { getGenreAlbumBySlug } from "@/lib/genre-catalog";
-import { getGenreLaneBySlug } from "@/lib/genre-lanes";
-import { fetchAlbumLookup, fetchAlbumLookupByCollectionId } from "@/lib/itunes";
+import { AlbumListeningTracker } from "@/components/listening/AlbumListeningTracker";
+import { ReviewComposer } from "@/components/ReviewComposer";
+import { detectMarketFromHeaders } from "@/lib/market";
+import { getAlbumDetail } from "@/lib/music-discovery";
 
-export const revalidate = 21600;
+export const revalidate = 1800;
 
 type AlbumPageProps = {
   params: Promise<{
     slug: string;
   }>;
   searchParams: Promise<{
-    lane?: string;
-    signals?: string;
+    country?: string;
   }>;
 };
-
-function formatReleaseDate(releaseDate: string, fallbackYear = "") {
-  if (!releaseDate) {
-    return fallbackYear || "Unknown release date";
-  }
-
-  const parsed = new Date(releaseDate);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return releaseDate;
-  }
-
-  return parsed.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
 
 function parseCollectionId(slug: string) {
   if (!slug.startsWith("itunes-")) {
@@ -45,104 +27,107 @@ function parseCollectionId(slug: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export default async function AlbumDetailPage({ params, searchParams }: AlbumPageProps) {
+function formatReleaseDate(value: string) {
+  if (!value) {
+    return "Release date unavailable";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+export default async function AlbumPage({ params, searchParams }: AlbumPageProps) {
   const { slug } = await params;
-  const { lane: laneSlug, signals } = await searchParams;
-  const lane = laneSlug ? getGenreLaneBySlug(laneSlug) : null;
-  const matchedTerms = signals ? signals.split("|").filter(Boolean) : lane ? [lane.title] : [];
-  const localAlbum = getGenreAlbumBySlug(slug);
+  const { country: requestedCountry } = await searchParams;
   const collectionId = parseCollectionId(slug);
 
-  const liveAlbum = collectionId
-    ? await fetchAlbumLookupByCollectionId(collectionId)
-    : localAlbum
-      ? await fetchAlbumLookup(localAlbum.artist, localAlbum.title)
-      : null;
-
-  if (!localAlbum && !liveAlbum) {
+  if (!collectionId) {
     notFound();
   }
 
-  const title = liveAlbum?.title ?? localAlbum?.title ?? "Unknown album";
-  const artist = liveAlbum?.artist ?? localAlbum?.artist ?? "Unknown artist";
-  const primaryGenre = liveAlbum?.genre || localAlbum?.genre || lane?.title || "";
-  const tracklist = liveAlbum?.tracks ?? [];
-  const trackCount = tracklist.length;
-  const releaseDate = formatReleaseDate(liveAlbum?.releaseDate ?? "", localAlbum?.year ?? "");
-  const whyItShowsUp = buildAlbumWhyItShowsUp({
-    title,
-    artist,
-    laneTitle: lane?.title ?? primaryGenre ?? "catalog",
-    primaryGenre,
-    releaseDate: liveAlbum?.releaseDate ?? localAlbum?.year ?? "",
-    trackCount,
-    matchedTerms: matchedTerms.length > 0 ? matchedTerms : [primaryGenre || "album lookup"],
-    source: collectionId ? "live" : "editorial",
-    artistInfo: localAlbum?.artistInfo ?? null,
-  });
-  const contextSections = buildAlbumContextSections({
-    title,
-    artist,
-    laneTitle: lane?.title ?? primaryGenre ?? "catalog",
-    primaryGenre,
-    releaseDate: liveAlbum?.releaseDate ?? localAlbum?.year ?? "",
-    trackCount,
-    matchedTerms: matchedTerms.length > 0 ? matchedTerms : [primaryGenre || "album lookup"],
-    source: collectionId ? "live" : "editorial",
-    artistInfo: localAlbum?.artistInfo ?? null,
-  });
+  const headerStore = await headers();
+  const market = detectMarketFromHeaders(headerStore);
+  const country = requestedCountry?.toLowerCase() || market.country;
+  const album = await getAlbumDetail(collectionId, country);
+
+  if (!album) {
+    notFound();
+  }
 
   return (
     <main className="min-h-screen pb-12 pt-6 text-[var(--text-main)] md:pb-16 md:pt-8">
       <div className="page-shell">
         <div className="topbar">
           <div>
-            <Link href={lane ? `/catalog/${lane.slug}` : "/"} className="brand-mark">
-              {lane ? `Back To ${lane.title}` : "Back To Home"}
+            <Link href="/discover/albums" className="brand-mark">
+              Back To Album Search
             </Link>
-            <h1 className="mt-4 text-4xl font-bold md:text-6xl">{title}</h1>
+            <h1 className="mt-4 text-4xl font-bold md:text-6xl">{album.title}</h1>
             <p className="mt-3 text-[var(--text-soft)]">
-              {artist} · {primaryGenre || "Genre unavailable"} · {releaseDate}
+              {album.artist} · {formatReleaseDate(album.releaseDate)}
             </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/stats" className="nav-link">
+              Stats
+            </Link>
+            <Link href="/history" className="nav-link">
+              History
+            </Link>
           </div>
         </div>
 
         <section className="hero-panel mb-6 p-6 md:p-8">
           <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
-            <div
-              className="cover-frame aspect-square"
-              style={{
-                backgroundImage: liveAlbum?.artworkUrl
-                  ? `url(${liveAlbum.artworkUrl})`
-                  : "linear-gradient(135deg, rgba(30,215,96,0.16), rgba(232,176,75,0.12))",
-              }}
-            >
+            <div className="cover-frame aspect-square" style={{ backgroundImage: `url(${album.coverArt})` }}>
               <div className="relative z-10 flex h-full items-end p-5">
-                <span className="pill">{lane?.title ?? primaryGenre ?? "Album"}</span>
+                <span className="pill">Album</span>
               </div>
             </div>
 
             <div>
-              <p className="kicker">Why it shows up</p>
-              <p className="mt-4 max-w-3xl text-lg leading-8 text-[var(--text-soft)]">
-                {whyItShowsUp}
-              </p>
-
+              <p className="kicker">Verified album details</p>
               <div className="meta-grid mt-6">
-                <div
-                  className="rounded-[1.2rem] border p-4"
-                  style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
-                >
-                  <p className="kicker">Genre lane</p>
-                  <p className="mt-2 text-2xl font-bold">{lane?.title ?? primaryGenre ?? "Unknown"}</p>
+                <div className="app-panel p-4">
+                  <p className="kicker">Genre</p>
+                  <p className="mt-2 text-lg text-[var(--text-soft)]">
+                    {album.genres.length > 0 ? album.genres.join(" · ") : "Genre unavailable"}
+                  </p>
                 </div>
-                <div
-                  className="rounded-[1.2rem] border p-4"
-                  style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
-                >
-                  <p className="kicker">Release</p>
-                  <p className="mt-2 text-2xl font-bold">{releaseDate}</p>
+                <div className="app-panel p-4">
+                  <p className="kicker">Label</p>
+                  <p className="mt-2 text-lg text-[var(--text-soft)]">{album.label || "Label unavailable"}</p>
                 </div>
+                <div className="app-panel p-4">
+                  <p className="kicker">Tracklist</p>
+                  <p className="mt-2 text-lg text-[var(--text-soft)]">{album.tracklist.length} tracks</p>
+                </div>
+                <div className="app-panel p-4">
+                  <p className="kicker">Chart performance</p>
+                  <p className="mt-2 text-lg text-[var(--text-soft)]">
+                    {album.chartPerformance || "No current Apple Music chart rank was verified for this market."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-[1.4rem] border p-5" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
+                <p className="kicker">Sourced context</p>
+                <p className="mt-3 text-sm leading-7 text-[var(--text-soft)]">
+                  {album.sourcedContext || "No verified public background or reception summary was found from the current trusted sources, so this page is only showing confirmed metadata."}
+                </p>
+                {album.sourceUrl ? (
+                  <a href={album.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex text-sm font-semibold text-[var(--accent-green)]">
+                    Open source
+                  </a>
+                ) : null}
               </div>
             </div>
           </div>
@@ -151,56 +136,46 @@ export default async function AlbumDetailPage({ params, searchParams }: AlbumPag
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="editorial-panel p-6 md:p-7">
             <p className="kicker">Tracklist</p>
-            <h2 className="section-heading mt-3 font-bold">Songs on the record.</h2>
-
+            <h2 className="section-heading mt-3 font-bold">Verified track list</h2>
             <div className="mt-6 space-y-3">
-              {tracklist.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">
-                  Tracklist is unavailable from the current lookup, so this page is only showing verified album-level metadata.
-                </p>
-              ) : (
-                tracklist.map((track, index) => (
-                  <div
-                    key={`${slug}-${track}-${index}`}
-                    className="rounded-[1.2rem] border px-4 py-4 text-sm"
-                    style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
-                  >
-                    <span className="mr-3 text-[var(--text-muted)]">{index + 1}.</span>
-                    <span>{track}</span>
-                  </div>
-                ))
-              )}
+              {album.tracklist.map((track, index) => (
+                <div
+                  key={`${track.title}-${index}`}
+                  className="rounded-[1.2rem] border px-4 py-4 text-sm"
+                  style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
+                >
+                  <span className="mr-3 text-[var(--text-muted)]">{track.trackNumber ?? index + 1}.</span>
+                  <span>{track.title}</span>
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="app-panel p-6 md:p-7">
-            <p className="kicker">Album context</p>
-            <h2 className="section-heading mt-3 font-bold">What gives this album its place.</h2>
-
-            <div className="mt-6 space-y-4">
-              {contextSections.map((section) => (
-                <div
-                  key={`${slug}-${section.label}`}
-                  className="rounded-[1.2rem] border p-4"
-                  style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
-                >
-                  <p className="kicker">{section.label}</p>
-                  <p className="mt-2 text-sm leading-7 text-[var(--text-soft)]">{section.text}</p>
-                </div>
-              ))}
-              {contextSections.length === 0 ? (
-                <div
-                  className="rounded-[1.2rem] border p-4"
-                  style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
-                >
-                  <p className="kicker">Verified metadata only</p>
-                  <p className="mt-2 text-sm leading-7 text-[var(--text-soft)]">
-                    This page could only confirm release and genre metadata from the live lookup, so it is intentionally avoiding filler beyond those verified details.
-                  </p>
-                </div>
-              ) : null}
+            <p className="kicker">Listening history</p>
+            <h2 className="section-heading mt-3 font-bold">Track plays from this album</h2>
+            <div className="mt-6">
+              <AlbumListeningTracker
+                albumId={slug}
+                albumTitle={album.title}
+                artistName={album.artist}
+                genre={album.genres[0] ?? null}
+                sourcePlatform="itunes"
+                tracklist={album.tracklist}
+              />
             </div>
           </div>
+        </section>
+
+        <section className="mt-6">
+          <ReviewComposer
+            entityType="album"
+            entityId={slug}
+            entityName={album.title}
+            entitySubtitle={album.artist}
+            entityHref={`/album/${slug}${requestedCountry ? `?country=${requestedCountry}` : ""}`}
+            artworkUrl={album.coverArt}
+          />
         </section>
       </div>
     </main>

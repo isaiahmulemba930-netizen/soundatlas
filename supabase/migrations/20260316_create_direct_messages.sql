@@ -42,7 +42,7 @@ as $$
   );
 $$;
 
-create or replace function public.is_direct_conversation_participant(conversation_uuid uuid, current_user uuid default auth.uid())
+create or replace function public.is_direct_conversation_participant(conversation_uuid uuid, current_user_id uuid default auth.uid())
 returns boolean
 language sql
 stable
@@ -53,11 +53,11 @@ as $$
     select 1
     from public.direct_conversations
     where id = conversation_uuid
-      and (participant_low_id = current_user or participant_high_id = current_user)
+      and (participant_low_id = current_user_id or participant_high_id = current_user_id)
   );
 $$;
 
-create or replace function public.can_send_direct_message(conversation_uuid uuid, current_user uuid default auth.uid())
+create or replace function public.can_send_direct_message(conversation_uuid uuid, current_user_id uuid default auth.uid())
 returns boolean
 language sql
 stable
@@ -69,9 +69,9 @@ as $$
     from public.direct_conversations
     where id = conversation_uuid
       and (
-        (participant_low_id = current_user and public.are_users_mutual_followers(participant_low_id, participant_high_id))
+        (participant_low_id = current_user_id and public.are_users_mutual_followers(participant_low_id, participant_high_id))
         or
-        (participant_high_id = current_user and public.are_users_mutual_followers(participant_low_id, participant_high_id))
+        (participant_high_id = current_user_id and public.are_users_mutual_followers(participant_low_id, participant_high_id))
       )
   );
 $$;

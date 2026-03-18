@@ -5,10 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultProfile,
   getRatingStats,
-  getRecentReviews,
   ProfileData,
-  SavedReview,
-  SOCIAL_STORAGE_EVENT,
 } from "@/lib/social";
 import {
   followUser,
@@ -22,10 +19,11 @@ import {
   unfollowUser,
   updateOwnProfile,
 } from "@/lib/follows";
+import { getOwnRecentReviews, OwnedReview, REVIEWS_UPDATED_EVENT } from "@/lib/reviews";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile);
-  const [recentReviews, setRecentReviews] = useState<SavedReview[]>([]);
+  const [recentReviews, setRecentReviews] = useState<OwnedReview[]>([]);
   const [followers, setFollowers] = useState<PublicProfile[]>([]);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
   const [authUserId, setAuthUserId] = useState("");
@@ -51,19 +49,6 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    function syncReviewState() {
-      setRecentReviews(getRecentReviews());
-    }
-
-    syncReviewState();
-    window.addEventListener(SOCIAL_STORAGE_EVENT, syncReviewState);
-
-    return () => {
-      window.removeEventListener(SOCIAL_STORAGE_EVENT, syncReviewState);
-    };
-  }, []);
-
-  useEffect(() => {
     let isMounted = true;
 
     async function loadSocialState() {
@@ -77,6 +62,7 @@ export default function ProfilePage() {
           setFollowers([]);
           setFollowing([]);
           setPeopleResults([]);
+          setRecentReviews([]);
           return;
         }
 
@@ -86,6 +72,9 @@ export default function ProfilePage() {
         if (!isMounted) return;
 
         await refreshSocialStateForUser(user.id);
+        const reviews = await getOwnRecentReviews(user.id, 10);
+        if (!isMounted) return;
+        setRecentReviews(reviews);
         setSocialError("");
       } catch (error) {
         if (!isMounted) return;
@@ -97,11 +86,11 @@ export default function ProfilePage() {
     }
 
     loadSocialState();
-    window.addEventListener(SOCIAL_STORAGE_EVENT, loadSocialState);
+    window.addEventListener(REVIEWS_UPDATED_EVENT, loadSocialState);
 
     return () => {
       isMounted = false;
-      window.removeEventListener(SOCIAL_STORAGE_EVENT, loadSocialState);
+      window.removeEventListener(REVIEWS_UPDATED_EVENT, loadSocialState);
     };
   }, []);
 
@@ -219,11 +208,22 @@ export default function ProfilePage() {
             </Link>
             <h1 className="mt-4 text-4xl font-bold md:text-6xl">Your profile</h1>
           </div>
-          {authUserId ? (
-            <Link href="/messages" className="nav-link">
-              Messages
+          <div className="flex flex-wrap gap-3">
+            <Link href="/connections" className="nav-link">
+              Platforms
             </Link>
-          ) : null}
+            <Link href="/stats" className="nav-link">
+              Stats
+            </Link>
+            <Link href="/history" className="nav-link">
+              History
+            </Link>
+            {authUserId ? (
+              <Link href="/messages" className="nav-link">
+                Messages
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         <section className="hero-panel mb-6 p-6 md:p-8">
@@ -262,6 +262,18 @@ export default function ProfilePage() {
                     {profile.favoriteArtist || "Not set yet"}
                   </p>
                 </div>
+                <Link href="/stats" className="app-panel p-4">
+                  <p className="kicker">Listening stats</p>
+                  <p className="mt-2 text-lg text-[var(--text-soft)]">
+                    Weekly, monthly, yearly, and all-time tracking.
+                  </p>
+                </Link>
+                <Link href="/history" className="app-panel p-4">
+                  <p className="kicker">Listening history</p>
+                  <p className="mt-2 text-lg text-[var(--text-soft)]">
+                    Every song you&apos;ve listened to, all in one place.
+                  </p>
+                </Link>
               </div>
             </div>
 
@@ -464,25 +476,27 @@ export default function ProfilePage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-lg font-semibold">
-                          {review.kind === "song" ? review.songTitle : review.albumTitle}
+                          {review.review_title || review.entity_name}
                         </h3>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <p className="text-sm text-[var(--text-muted)]">
-                            {review.kind === "song"
-                              ? `${review.trackNumber || "Track"} on ${review.albumTitle}`
-                              : review.albumDate}
+                            {review.entity_type === "song"
+                              ? `Song review${review.entity_subtitle ? ` on ${review.entity_subtitle}` : ""}`
+                              : review.entity_type === "album"
+                                ? review.entity_subtitle || "Album review"
+                                : review.entity_subtitle || "Artist review"}
                           </p>
                           <span className="pill">{review.visibility}</span>
                         </div>
                       </div>
                       <div className="text-right text-xs text-[var(--text-muted)]">
-                        <p>{review.rating > 0 ? `${review.rating.toFixed(1)} / 5` : "No score"}</p>
-                        <p className="mt-1">{new Date(review.createdAt).toLocaleDateString()}</p>
+                        <p>{review.rating ? `${review.rating.toFixed(1)} / 5` : "No score"}</p>
+                        <p className="mt-1">{new Date(review.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
 
                     <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
-                      {review.reviewText || "No review text."}
+                      {review.review_text || "No review text."}
                     </p>
                   </div>
                 ))

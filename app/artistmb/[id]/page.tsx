@@ -1,60 +1,30 @@
-"use client";
-
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import StarRating from "@/components/StarRating";
+import { headers } from "next/headers";
+import { notFound } from "next/navigation";
 
-type Artist = {
-  id: string;
-  name: string;
-  country?: string;
-  origin?: string;
-  description?: string;
-  bioSummary?: string;
-  sourceUrl?: string;
+import { ReviewComposer } from "@/components/ReviewComposer";
+import { detectMarketFromHeaders } from "@/lib/market";
+import { getArtistDetail } from "@/lib/music-discovery";
+
+type ArtistPageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+  searchParams: Promise<{
+    country?: string;
+  }>;
 };
 
-type Album = {
-  id: string;
-  title: string;
-  date: string;
-};
-
-export default function ArtistPage() {
-  const params = useParams();
-  const id = params.id as string;
-
-  const [artist, setArtist] = useState<Artist | null>(null);
-  const [albums, setAlbums] = useState<Album[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [artistRating, setArtistRating] = useState(0);
-
-  useEffect(() => {
-    async function loadArtist() {
-      const res = await fetch(`/api/artist/${id}`);
-      const data = await res.json();
-
-      setArtist(data.artist);
-      setAlbums(data.albums || []);
-
-      const savedArtistRating = Number(window.localStorage.getItem(`artist-rating-${id}`) || 0);
-      if (!Number.isNaN(savedArtistRating)) {
-        setArtistRating(savedArtistRating);
-      }
-
-      setLoading(false);
-    }
-
-    loadArtist();
-  }, [id]);
-
-  if (loading) {
-    return <main className="min-h-screen p-8 text-[var(--text-main)]">Loading artist...</main>;
-  }
+export default async function ArtistPage({ params, searchParams }: ArtistPageProps) {
+  const { id } = await params;
+  const { country: requestedCountry } = await searchParams;
+  const headerStore = await headers();
+  const market = detectMarketFromHeaders(headerStore);
+  const country = requestedCountry?.toLowerCase() || market.country;
+  const artist = await getArtistDetail(id, country);
 
   if (!artist) {
-    return <main className="min-h-screen p-8 text-[var(--text-main)]">Artist not found.</main>;
+    notFound();
   }
 
   return (
@@ -62,8 +32,8 @@ export default function ArtistPage() {
       <div className="page-shell">
         <div className="topbar">
           <div>
-            <Link href="/" className="brand-mark">
-              Back To Home
+            <Link href="/discover/artists" className="brand-mark">
+              Back To Artist Search
             </Link>
             <h1 className="mt-4 text-4xl font-bold md:text-6xl">{artist.name}</h1>
           </div>
@@ -72,88 +42,83 @@ export default function ArtistPage() {
         <section className="hero-panel mb-6 p-6 md:p-8">
           <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div>
-              <p className="kicker">Artist snapshot</p>
+              <p className="kicker">Verified biography</p>
               <p className="mt-4 max-w-3xl text-lg leading-8 text-[var(--text-soft)]">
-                {artist.bioSummary || "No biography available yet."}
+                {artist.biography || "No verified public biography was found from the current trusted sources, so this page is only showing confirmed metadata."}
               </p>
-
-              <div className="mt-6 max-w-md">
-                <StarRating
-                  storageKey={`artist-rating-${artist.id}`}
-                  label="Your artist rating"
-                  onChange={setArtistRating}
-                />
-              </div>
+              {artist.sourceUrl ? (
+                <a href={artist.sourceUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex text-sm font-semibold text-[var(--accent-green)]">
+                  Open biography source
+                </a>
+              ) : null}
             </div>
 
             <div className="meta-grid">
               <div className="app-panel p-5">
-                <p className="kicker">From</p>
-                <p className="mt-2 text-xl font-semibold">
-                  {artist.origin || artist.country || "Unknown"}
+                <p className="kicker">Origin</p>
+                <p className="mt-2 text-lg text-[var(--text-soft)]">{artist.origin || "Origin unavailable"}</p>
+              </div>
+              <div className="app-panel p-5">
+                <p className="kicker">Genres</p>
+                <p className="mt-2 text-lg text-[var(--text-soft)]">
+                  {artist.genres.length > 0 ? artist.genres.join(" · ") : "No verified genre data available."}
                 </p>
               </div>
               <div className="app-panel p-5">
-                <p className="kicker">Known for</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
-                  {artist.description || "Public biography data"}
-                </p>
+                <p className="kicker">Years active</p>
+                <p className="mt-2 text-lg text-[var(--text-soft)]">{artist.yearsActive || "Years active unavailable"}</p>
               </div>
               <div className="app-panel p-5">
-                <p className="kicker">Current rating</p>
-                <p className="mt-2 text-xl font-semibold">
-                  {artistRating > 0 ? `${artistRating.toFixed(1)} / 5` : "Not rated yet"}
+                <p className="kicker">Current relevance</p>
+                <p className="mt-2 text-lg text-[var(--text-soft)]">
+                  {artist.currentRelevance || "No verified current chart signal for this market right now."}
                 </p>
-              </div>
-              <div className="app-panel p-5">
-                <p className="kicker">Biography source</p>
-                {artist.sourceUrl ? (
-                  <a
-                    href={artist.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex text-sm font-semibold text-[var(--accent-green)]"
-                  >
-                    Open public source
-                  </a>
-                ) : (
-                  <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
-                    Source link unavailable.
-                  </p>
-                )}
               </div>
             </div>
           </div>
         </section>
 
         <section className="editorial-panel p-6 md:p-7">
-          <p className="kicker">Albums</p>
-          <h2 className="section-heading mt-3 font-bold">Where to go next.</h2>
+          <p className="kicker">Catalog overview</p>
+          <h2 className="section-heading mt-3 font-bold">Major albums from MusicBrainz</h2>
 
           <div className="mt-6 space-y-4">
-            {albums.map((album) => (
-              <Link
-                key={album.id}
-                href={`/albummb/${album.id}`}
-                className="flex items-center gap-4 rounded-[1.4rem] border p-4 transition hover:-translate-y-0.5"
-                style={{
-                  borderColor: "var(--border-main)",
-                  background: "rgba(255,255,255,0.03)",
-                }}
-              >
-                <div
-                  className="cover-frame h-20 w-20 shrink-0"
+            {artist.majorAlbums.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">
+                No verified album list was available from the current source.
+              </p>
+            ) : (
+              artist.majorAlbums.map((album) => (
+                <Link
+                  key={album.id}
+                  href={`/discover/albums?q=${encodeURIComponent(`${artist.name} ${album.title}`)}`}
+                  className="flex items-center gap-4 rounded-[1.4rem] border p-4 transition hover:-translate-y-0.5"
                   style={{
-                    backgroundImage: `url(https://coverartarchive.org/release-group/${album.id}/front-250)`,
+                    borderColor: "var(--border-main)",
+                    background: "rgba(255,255,255,0.03)",
                   }}
-                />
-                <div className="min-w-0">
-                  <p className="text-lg font-semibold">{album.title}</p>
-                  <p className="mt-1 text-sm text-[var(--text-muted)]">{album.date}</p>
-                </div>
-              </Link>
-            ))}
+                >
+                  <div className="cover-frame h-20 w-20 shrink-0" />
+                  <div>
+                    <p className="text-lg font-semibold">{album.title}</p>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                      {album.releaseDate || "Release date unavailable"}
+                    </p>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
+        </section>
+
+        <section className="mt-6">
+          <ReviewComposer
+            entityType="artist"
+            entityId={id}
+            entityName={artist.name}
+            entitySubtitle={artist.origin}
+            entityHref={`/artistmb/${id}${requestedCountry ? `?country=${requestedCountry}` : ""}`}
+          />
         </section>
       </div>
     </main>

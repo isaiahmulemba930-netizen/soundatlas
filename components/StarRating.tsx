@@ -8,6 +8,7 @@ type StarRatingProps = {
   size?: number;
   showValue?: boolean;
   onChange?: (value: number) => void;
+  initialValue?: number;
 };
 
 function StarIcon({
@@ -56,13 +57,14 @@ export default function StarRating({
   size = 26,
   showValue = true,
   onChange,
+  initialValue = 0,
 }: StarRatingProps) {
   const [rating, setRating] = useState(() => {
     if (typeof window === "undefined") return 0;
 
     const saved = window.localStorage.getItem(storageKey);
     const parsed = Number(saved);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    return Number.isNaN(parsed) ? initialValue : parsed;
   });
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const activeRating = hoverRating ?? rating;
