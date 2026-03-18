@@ -6,7 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import { SourcesFooter } from "@/components/SourcesFooter";
 import { TrendingReviewsSection } from "@/components/TrendingReviewsSection";
-import { discoveryGenres } from "@/lib/genre-discovery";
+import type { TrendingGenresPayload } from "@/lib/genre-trends";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type AuthProfile = {
@@ -38,13 +38,13 @@ function getGreeting(hour: number) {
   return "Good evening";
 }
 
-function getRotatingGenres() {
-  const sortedGenres = [...discoveryGenres].sort((left, right) => left.slug.localeCompare(right.slug));
-  const bucket = Math.floor(Date.now() / (1000 * 60 * 30));
-  const startIndex = (bucket * 5) % sortedGenres.length;
-
-  return Array.from({ length: 5 }, (_, index) => sortedGenres[(startIndex + index) % sortedGenres.length]);
-}
+type HomeGenreCard = {
+  slug: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  signal: string;
+};
 
 export default function Home() {
   const [headline, setHeadline] = useState("Good evening");
@@ -59,7 +59,8 @@ export default function Home() {
   const [loggedInUser, setLoggedInUser] = useState<Session["user"] | null>(null);
   const [currentProfile, setCurrentProfile] = useState<AuthProfile | null>(null);
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
-  const [rotatingGenres, setRotatingGenres] = useState(getRotatingGenres);
+  const [rotatingGenres, setRotatingGenres] = useState<HomeGenreCard[]>([]);
+  const [genrePulseSummary, setGenrePulseSummary] = useState("Refreshing the latest genre pulse now.");
 
   function getSupabaseClient() {
     if (!supabase || !isSupabaseConfigured) {
@@ -150,9 +151,41 @@ export default function Home() {
   }, [currentProfile, loggedInUser]);
 
   useEffect(() => {
-    setRotatingGenres(getRotatingGenres());
-    const intervalId = window.setInterval(() => setRotatingGenres(getRotatingGenres()), 1000 * 60 * 30);
+    let isMounted = true;
+
+    async function loadGenrePulse() {
+      try {
+        const response = await fetch("/api/genre-trends", { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error("Unable to load genre pulse.");
+        }
+
+        const payload = (await response.json()) as TrendingGenresPayload;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setRotatingGenres(payload.genres);
+        setGenrePulseSummary(payload.sourceSummary);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setRotatingGenres([]);
+        setGenrePulseSummary("The latest verified genre pulse is still refreshing.");
+      }
+    }
+
+    void loadGenrePulse();
+    const intervalId = window.setInterval(() => {
+      void loadGenrePulse();
+    }, 1000 * 60 * 30);
+
     return () => {
+      isMounted = false;
       window.clearInterval(intervalId);
     };
   }, []);
@@ -231,8 +264,8 @@ export default function Home() {
   }
 
   const rotatingGenreSummary = useMemo(() => {
-    return `Showing 5 genres at a time from the full discovery catalog and rotating every 30 minutes.`;
-  }, []);
+    return genrePulseSummary;
+  }, [genrePulseSummary]);
 
   return (
     <main className="min-h-screen pb-12 pt-6 text-[var(--text-main)] md:pb-16 md:pt-8">
@@ -382,15 +415,23 @@ export default function Home() {
         <section className="mb-6">
           <div className="mb-4">
             <p className="kicker">Discover by genre</p>
-            <h3 className="section-heading mt-2 font-bold">Five genres in rotation, refreshed every 30 minutes.</h3>
+            <h3 className="section-heading mt-2 font-bold">Five genre pulses, refreshed every 30 minutes.</h3>
             <p className="mt-3 max-w-3xl text-[var(--text-soft)]">{rotatingGenreSummary}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {rotatingGenres.length === 0 ? (
+              <div
+                className="editorial-panel p-5 text-sm leading-7 text-[var(--text-soft)] md:col-span-2 xl:col-span-5"
+                style={{ background: "linear-gradient(180deg, rgba(30,215,96,0.05), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)" }}
+              >
+                No current genre pulse is ready to display yet. This section repopulates as soon as verified chart signals come through.
+              </div>
+            ) : null}
             {rotatingGenres.map((genre, index) => (
               <Link
                 key={genre.slug}
-                href={`/catalog/${genre.slug}`}
+                href={genre.href}
                 className="editorial-panel p-5"
                 style={{
                   background:
@@ -401,11 +442,11 @@ export default function Home() {
                         : "linear-gradient(180deg, rgba(105,162,255,0.09), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
                 }}
               >
-                <p className="kicker">{genre.familyTitle}</p>
+                <p className="kicker">Live genre pulse</p>
                 <p className="mt-3 text-2xl font-bold">{genre.title}</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--text-soft)]">{genre.description}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--text-soft)]">{genre.subtitle}</p>
                 <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  Rotating editorial slot
+                  {genre.signal}
                 </p>
                 <p className="mt-4 text-sm font-semibold text-[var(--accent-green)]">Open genre page</p>
               </Link>

@@ -119,7 +119,7 @@ const discoverySeeds: FamilySeed[] = [
     description: "A wide field of regional and global styles powering some of the biggest cross-border momentum in music.",
     catalogSlug: "latin",
     genres: [
-      { title: "Latin", description: "A broad lane spanning contemporary urbano, legacy catalog staples, and crossover giants.", aliases: ["latin music"], catalogSlug: "latin" },
+      { title: "Latin", description: "A broad lane spanning contemporary urbano, established classics, and crossover giants.", aliases: ["latin music"], catalogSlug: "latin" },
       { title: "Reggaeton", description: "Dem Bow-rooted urbano music built for momentum, chant, and global scale.", aliases: ["urbano latino"], catalogSlug: "latin" },
       { title: "Latin Pop", description: "Hook-driven pop records shaped through Spanish-language crossover and regional detail.", aliases: ["pop latino"], catalogSlug: "latin" },
       { title: "Regional Mexicano", description: "Current Mexican regional styles with huge audience energy and rapidly shifting stars.", aliases: ["regional mexican", "corridos tumbados"], catalogSlug: "latin" },
@@ -173,7 +173,7 @@ const discoverySeeds: FamilySeed[] = [
   {
     slug: "jazz-and-soul",
     title: "Jazz & Soul",
-    description: "Improvisational and groove-heavy traditions with deep catalog gravity and ongoing reinvention.",
+    description: "Improvisational and groove-heavy traditions with deep historical gravity and ongoing reinvention.",
     catalogSlug: "soul",
     genres: [
       { title: "Soul", description: "Emotion-forward groove music where vocal presence carries enormous weight.", aliases: ["classic soul"], catalogSlug: "soul" },
@@ -417,6 +417,28 @@ export function mapRawGenreToCatalogSlug(rawGenre: string) {
   }
 
   return null;
+}
+
+export function mapRawGenreToDiscoverySlug(rawGenre: string) {
+  const normalized = normalizeGenreName(rawGenre);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const exactMatch = discoveryGenres.find((genre) => {
+    return genre.aliases.some((alias) => alias === normalized) || normalizeGenreName(genre.title) === normalized;
+  });
+
+  if (exactMatch) {
+    return exactMatch.slug;
+  }
+
+  const partialMatch = discoveryGenres.find((genre) => {
+    return genre.aliases.some((alias) => normalized.includes(alias) || alias.includes(normalized));
+  });
+
+  return partialMatch?.slug ?? null;
 }
 
 export function getEditorialFallbackGenres() {

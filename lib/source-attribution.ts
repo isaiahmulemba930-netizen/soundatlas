@@ -30,6 +30,6 @@ export const HOMEPAGE_SOURCE_GROUPS: SourceGroup[] = [
   },
   {
     label: "Genres",
-    sources: ["SoundAtlas editorial genre taxonomy", "iTunes storefront genres", "MusicBrainz tags / genres"],
+    sources: ["Apple Music charts", "current genre search activity", "regional listening patterns"],
   },
 ];

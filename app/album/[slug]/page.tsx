@@ -44,6 +44,14 @@ function formatReleaseDate(value: string) {
   });
 }
 
+function buildTrackHref(trackId: number | null, country: string) {
+  if (!trackId) {
+    return null;
+  }
+
+  return `/track/${trackId}?country=${country}`;
+}
+
 export default async function AlbumPage({ params, searchParams }: AlbumPageProps) {
   const { slug } = await params;
   const { country: requestedCountry } = await searchParams;
@@ -144,8 +152,26 @@ export default async function AlbumPage({ params, searchParams }: AlbumPageProps
                   className="rounded-[1.2rem] border px-4 py-4 text-sm"
                   style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}
                 >
-                  <span className="mr-3 text-[var(--text-muted)]">{track.trackNumber ?? index + 1}.</span>
-                  <span>{track.title}</span>
+                  {buildTrackHref(track.id, country) ? (
+                    <Link
+                      href={buildTrackHref(track.id, country) as string}
+                      className="block transition hover:text-[var(--accent-green)]"
+                    >
+                      <span className="mr-3 text-[var(--text-muted)]">{track.trackNumber ?? index + 1}.</span>
+                      <span className="font-semibold">{track.title}</span>
+                      <span className="ml-3 text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                        Open song page
+                      </span>
+                    </Link>
+                  ) : (
+                    <>
+                      <span className="mr-3 text-[var(--text-muted)]">{track.trackNumber ?? index + 1}.</span>
+                      <span>{track.title}</span>
+                      <span className="ml-3 text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                        Song page unavailable
+                      </span>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

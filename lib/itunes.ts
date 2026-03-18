@@ -13,6 +13,7 @@ type ItunesSearchResult = {
 
 type ItunesTrackResult = {
   wrapperType: string;
+  trackId?: number;
   collectionId?: number;
   collectionName?: string;
   artistName?: string;
@@ -25,6 +26,7 @@ type ItunesTrackResult = {
 };
 
 export type AlbumLookupTrack = {
+  id: number | null;
   title: string;
   trackNumber: number | null;
   durationMs: number | null;
@@ -94,6 +96,79 @@ function buildAlbumSlug(collectionId: number) {
   return `itunes-${collectionId}`;
 }
 
+async function resolveTrackId(params: {
+  title: string;
+  artist: string;
+  album: string;
+  collectionId?: number;
+  trackNumber?: number | null;
+}) {
+  try {
+    const searchParams = new URLSearchParams({
+      term: `${params.artist} ${params.title}`,
+      media: "music",
+      entity: "song",
+      limit: "20",
+    });
+
+    const response = await fetch(`https://itunes.apple.com/search?${searchParams.toString()}`, {
+      next: { revalidate: 86400 },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      results?: ItunesTrackResult[];
+    };
+
+    const normalizedTitle = normalizeValue(params.title);
+    const normalizedArtist = normalizeValue(params.artist);
+    const normalizedAlbum = normalizeValue(params.album);
+
+    const exactCollectionMatch = (payload.results ?? []).find((result) => {
+      return (
+        typeof result.trackId === "number" &&
+        normalizeValue(result.trackName ?? "") === normalizedTitle &&
+        normalizeValue(result.artistName ?? "").includes(normalizedArtist) &&
+        typeof params.collectionId === "number" &&
+        result.collectionId === params.collectionId
+      );
+    });
+
+    if (exactCollectionMatch?.trackId) {
+      return exactCollectionMatch.trackId;
+    }
+
+    const albumMatch = (payload.results ?? []).find((result) => {
+      return (
+        typeof result.trackId === "number" &&
+        normalizeValue(result.trackName ?? "") === normalizedTitle &&
+        normalizeValue(result.artistName ?? "").includes(normalizedArtist) &&
+        normalizeValue(result.collectionName ?? "") === normalizedAlbum &&
+        (params.trackNumber == null || result.trackNumber === params.trackNumber)
+      );
+    });
+
+    if (albumMatch?.trackId) {
+      return albumMatch.trackId;
+    }
+
+    const looseMatch = (payload.results ?? []).find((result) => {
+      return (
+        typeof result.trackId === "number" &&
+        normalizeValue(result.trackName ?? "") === normalizedTitle &&
+        normalizeValue(result.artistName ?? "").includes(normalizedArtist)
+      );
+    });
+
+    return looseMatch?.trackId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchAlbumLookup(artist: string, album: string): Promise<AlbumLookup | null> {
   try {
     const searchParams = new URLSearchParams({
@@ -144,14 +219,26 @@ export async function fetchAlbumLookup(artist: string, album: string): Promise<A
       results?: ItunesTrackResult[];
     };
 
-    const tracks = (lookupData.results ?? [])
+    const trackItems = (lookupData.results ?? [])
       .filter((item) => item.wrapperType === "track" && item.trackName)
-      .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      .map((item) => ({
+      .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0));
+
+    const tracks = await Promise.all(
+      trackItems.map(async (item) => ({
+        id:
+          item.trackId ??
+          (await resolveTrackId({
+            title: item.trackName as string,
+            artist: item.artistName ?? match.artistName,
+            album: item.collectionName ?? match.collectionName,
+            collectionId: item.collectionId ?? match.collectionId,
+            trackNumber: item.trackNumber ?? null,
+          })),
         title: item.trackName as string,
         trackNumber: item.trackNumber ?? null,
         durationMs: item.trackTimeMillis ?? null,
-      }));
+      }))
+    );
 
     return {
       title: match.collectionName,
@@ -191,14 +278,29 @@ export async function fetchAlbumLookupByCollectionId(collectionId: number): Prom
       return null;
     }
 
-    const tracks = items
+    const collectionArtist = collection.artistName;
+    const collectionName = collection.collectionName;
+
+    const trackItems = items
       .filter((item) => item.wrapperType === "track" && item.trackName)
-      .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      .map((item) => ({
+      .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0));
+
+    const tracks = await Promise.all(
+      trackItems.map(async (item) => ({
+        id:
+          item.trackId ??
+          (await resolveTrackId({
+            title: item.trackName as string,
+            artist: item.artistName ?? collectionArtist,
+            album: item.collectionName ?? collectionName,
+            collectionId: item.collectionId ?? collectionId,
+            trackNumber: item.trackNumber ?? null,
+          })),
         title: item.trackName as string,
         trackNumber: item.trackNumber ?? null,
         durationMs: item.trackTimeMillis ?? null,
-      }));
+      }))
+    );
 
     return {
       title: collection.collectionName,

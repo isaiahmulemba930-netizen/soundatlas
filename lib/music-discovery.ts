@@ -236,7 +236,7 @@ export type AlbumDetail = {
   releaseDate: string;
   coverArt: string;
   genres: string[];
-  tracklist: Array<{ title: string; trackNumber: number | null; durationMs: number | null }>;
+  tracklist: Array<{ id: number | null; title: string; trackNumber: number | null; durationMs: number | null }>;
   label: string | null;
   chartPerformance: string | null;
   sourcedContext: string | null;
