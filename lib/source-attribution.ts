@@ -32,4 +32,8 @@ export const HOMEPAGE_SOURCE_GROUPS: SourceGroup[] = [
     label: "Genres",
     sources: ["Apple Music charts", "current genre search activity", "regional listening patterns"],
   },
+  {
+    label: "Upcoming Releases",
+    sources: ["Apple Music pre-release listings", "credible music press coverage", "regional chart momentum"],
+  },
 ];

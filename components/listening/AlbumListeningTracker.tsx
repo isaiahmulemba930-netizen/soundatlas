@@ -37,6 +37,7 @@ export function AlbumListeningTracker({
   const [pendingTrackId, setPendingTrackId] = useState("");
   const [trackedTrackIds, setTrackedTrackIds] = useState<string[]>([]);
   const [trackingError, setTrackingError] = useState("");
+  const [trackingMessage, setTrackingMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -72,9 +73,10 @@ export function AlbumListeningTracker({
     const trackId = buildTrackId(albumId, track, index);
     setPendingTrackId(trackId);
     setTrackingError("");
+    setTrackingMessage("");
 
     try {
-      await trackListeningEvent({
+      const result = await trackListeningEvent({
         trackId,
         trackName: track.title,
         artistId,
@@ -93,6 +95,11 @@ export function AlbumListeningTracker({
       });
 
       setTrackedTrackIds((current) => [trackId, ...current.filter((value) => value !== trackId)]);
+      setTrackingMessage(
+        result.rewardCredits > 0
+          ? `Play logged. You earned +${result.rewardCredits} AC.`
+          : "Play logged."
+      );
     } catch (error) {
       setTrackingError(
         error instanceof Error ? error.message : "Unable to track that play right now."
@@ -114,6 +121,9 @@ export function AlbumListeningTracker({
             <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
               Log plays from this album to feed your weekly, monthly, yearly, and all-time stats in near real time.
             </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
+              Rewarded play logs also add a small AC bonus to your marketplace balance each day.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2 text-sm text-[var(--text-soft)]">
             <span className="pill">{tracklist.length} tracks</span>
@@ -129,6 +139,10 @@ export function AlbumListeningTracker({
 
         {trackingError ? (
           <p className="mt-4 text-sm text-[#ff9f86]">{trackingError}</p>
+        ) : null}
+
+        {trackingMessage ? (
+          <p className="mt-4 text-sm text-[var(--accent-green)]">{trackingMessage}</p>
         ) : null}
 
         <div className="mt-4 flex flex-wrap gap-3">

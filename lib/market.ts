@@ -48,7 +48,7 @@ function normalizeCountry(value: string | null | undefined) {
   return value.trim().toLowerCase();
 }
 
-function getCountryName(country: string) {
+export function getCountryName(country: string) {
   try {
     return new Intl.DisplayNames(["en"], { type: "region" }).of(country.toUpperCase()) ?? country.toUpperCase();
   } catch {

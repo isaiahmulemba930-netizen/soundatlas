@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
+import { UpcomingReleaseCard } from "@/components/UpcomingReleaseCard";
 import { SourcesFooter } from "@/components/SourcesFooter";
 import { TrendingReviewsSection } from "@/components/TrendingReviewsSection";
 import type { TrendingGenresPayload } from "@/lib/genre-trends";
+import type { UpcomingReleasesPayload, UpcomingRelease } from "@/lib/upcoming-release-types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type AuthProfile = {
@@ -15,6 +17,11 @@ type AuthProfile = {
 };
 
 const discoveryEntryPoints = [
+  {
+    title: "Marketplace",
+    href: "/marketplace",
+    description: "Trade Atlas Credits on songs, artists, and albums, then earn extra AC by rating, reviewing, and logging plays.",
+  },
   {
     title: "Search by Album",
     href: "/discover/albums",
@@ -61,6 +68,8 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
   const [rotatingGenres, setRotatingGenres] = useState<HomeGenreCard[]>([]);
   const [genrePulseSummary, setGenrePulseSummary] = useState("Refreshing the latest genre pulse now.");
+  const [upcomingReleases, setUpcomingReleases] = useState<UpcomingRelease[]>([]);
+  const [upcomingSummary, setUpcomingSummary] = useState("Refreshing upcoming releases now.");
 
   function getSupabaseClient() {
     if (!supabase || !isSupabaseConfigured) {
@@ -182,6 +191,46 @@ export default function Home() {
     void loadGenrePulse();
     const intervalId = window.setInterval(() => {
       void loadGenrePulse();
+    }, 1000 * 60 * 30);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUpcomingReleases() {
+      try {
+        const response = await fetch("/api/upcoming-releases?limit=5", { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error("Unable to load upcoming releases.");
+        }
+
+        const payload = (await response.json()) as UpcomingReleasesPayload;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUpcomingReleases(payload.releases);
+        setUpcomingSummary(payload.sourceSummary);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setUpcomingReleases([]);
+        setUpcomingSummary("The latest upcoming release signals are still refreshing.");
+      }
+    }
+
+    void loadUpcomingReleases();
+    const intervalId = window.setInterval(() => {
+      void loadUpcomingReleases();
     }, 1000 * 60 * 30);
 
     return () => {
@@ -331,6 +380,9 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Link href="/marketplace" className="nav-link">
+              Marketplace
+            </Link>
             <Link href="/discover/albums" className="nav-link">
               Albums
             </Link>
@@ -373,6 +425,9 @@ export default function Home() {
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
+                <Link href="/marketplace" className="ghost-button">
+                  Marketplace
+                </Link>
                 <Link href="/discover/albums" className="solid-button">
                   Search by Album
                 </Link>
@@ -452,6 +507,34 @@ export default function Home() {
               </Link>
             ))}
           </div>
+        </section>
+
+        <section className="mb-6">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="kicker">Upcoming</p>
+              <h3 className="section-heading mt-2 font-bold">Upcoming Releases</h3>
+              <p className="mt-3 max-w-3xl text-[var(--text-soft)]">{upcomingSummary}</p>
+            </div>
+            <Link href="/upcoming-releases" className="ghost-button">
+              View Top Upcoming Releases
+            </Link>
+          </div>
+
+          {upcomingReleases.length === 0 ? (
+            <div
+              className="editorial-panel p-5 text-sm leading-7 text-[var(--text-soft)]"
+              style={{ background: "linear-gradient(180deg, rgba(232,176,75,0.05), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)" }}
+            >
+              No verified upcoming releases are ready to show yet. This section updates as soon as real announcement and teaser signals settle.
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              {upcomingReleases.map((release) => (
+                <UpcomingReleaseCard key={release.id} release={release} />
+              ))}
+            </div>
+          )}
         </section>
 
         <SourcesFooter />

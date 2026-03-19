@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { rewardReviewContribution } from "@/lib/music-market-client";
 
 export type ReviewEntityType = "song" | "album" | "artist";
 export type ReviewVisibility = "public" | "private";
@@ -53,6 +54,11 @@ export type ReviewDraftInput = {
   reviewText: string;
   rating?: number | null;
   visibility: ReviewVisibility;
+};
+
+export type SavedReviewResult = {
+  review: OwnedReview;
+  rewardCredits: number;
 };
 
 function getSupabaseClient() {
@@ -237,6 +243,18 @@ export async function saveOwnReview(input: ReviewDraftInput) {
     throw error;
   }
 
+  const rewardCredits = await rewardReviewContribution({
+    isFirstReview: !existing,
+    hasRating: typeof input.rating === "number" && input.rating > 0,
+    reviewText: input.reviewText,
+    visibility: input.visibility,
+    entityType: input.entityType,
+    entityId: input.entityId,
+  });
+
   emitReviewsUpdated();
-  return data as OwnedReview;
+  return {
+    review: data as OwnedReview,
+    rewardCredits,
+  } satisfies SavedReviewResult;
 }

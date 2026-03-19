@@ -102,10 +102,10 @@ export function ReviewComposer({
 
     setIsSaving(true);
     setError("");
-    setMessage("");
+      setMessage("");
 
     try {
-      await saveOwnReview({
+      const result = await saveOwnReview({
         entityType,
         entityId,
         entityName,
@@ -118,7 +118,12 @@ export function ReviewComposer({
         visibility,
       });
 
-      setMessage(visibility === "public" ? "Your public review is live." : "Your private review was saved.");
+      const baseMessage = visibility === "public" ? "Your public review is live." : "Your private review was saved.";
+      setMessage(
+        result.rewardCredits > 0
+          ? `${baseMessage} You earned +${result.rewardCredits} AC.`
+          : baseMessage
+      );
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save your review right now.");
     } finally {
@@ -132,6 +137,9 @@ export function ReviewComposer({
       <h2 className="section-heading mt-3 font-bold">Write your take</h2>
       <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-soft)]">
         Publish a public review for this {entityLabel} or keep it private for your own listening diary.
+      </p>
+      <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-soft)]">
+        Add a rating to earn bonus AC, and write a real review to earn an even bigger Atlas Credit reward.
       </p>
 
       {!authChecked || isLoadingReview ? (

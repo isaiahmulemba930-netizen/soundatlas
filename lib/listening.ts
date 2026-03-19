@@ -1,5 +1,6 @@
 "use client";
 
+import { rewardListeningPlay } from "@/lib/music-market-client";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export const LISTENING_ACTIVITY_EVENT = "soundatlas-listening-activity";
@@ -214,8 +215,15 @@ export async function trackListeningEvent(event: ListeningEventInput) {
     throw error;
   }
 
+  const rewardCredits = await rewardListeningPlay({
+    entityType: event.albumId ? "album" : "song",
+    entityId: event.albumId ?? event.trackId,
+  });
   emitListeningActivity();
-  return data as ListeningEventRecord;
+  return {
+    record: data as ListeningEventRecord,
+    rewardCredits,
+  };
 }
 
 export async function importListeningHistory(events: ListeningEventInput[]) {
