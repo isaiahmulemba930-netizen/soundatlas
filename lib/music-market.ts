@@ -894,7 +894,12 @@ export async function getPublicPortfolioByUsername(username: string, country: st
     client.from("market_accounts").select("*").eq("user_id", profile.user_id).eq("is_public", true).maybeSingle(),
     client.from("market_positions").select("*").eq("user_id", profile.user_id).gt("shares", 0),
     client.from("market_transactions").select("*").eq("user_id", profile.user_id).order("created_at", { ascending: false }).limit(12),
-    client.from("market_badges").select("*").eq("user_id", profile.user_id).order("awarded_at", { ascending: false }),
+    client
+      .from("user_badges")
+      .select("id, user_id, badge_key, badge_name, badge_description, unlocked_at")
+      .eq("user_id", profile.user_id)
+      .eq("badge_category", "Marketplace")
+      .order("unlocked_at", { ascending: false }),
   ]);
 
   if (!accountRow.data) {
@@ -937,9 +942,9 @@ export async function getPublicPortfolioByUsername(username: string, country: st
     id: row.id,
     userId: row.user_id,
     badgeKey: row.badge_key,
-    badgeLabel: row.badge_label,
+    badgeLabel: row.badge_name,
     badgeDescription: row.badge_description,
-    awardedAt: row.awarded_at,
+    awardedAt: row.unlocked_at,
   })) as MarketBadge[];
 
   const account: MarketAccount = {

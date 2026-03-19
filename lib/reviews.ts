@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { syncBadgeProgressForCurrentUser, syncBadgeProgressForUser } from "@/lib/badges";
 import { rewardReviewContribution } from "@/lib/music-market-client";
 
 export type ReviewEntityType = "song" | "album" | "artist";
@@ -59,6 +60,24 @@ export type ReviewDraftInput = {
 export type SavedReviewResult = {
   review: OwnedReview;
   rewardCredits: number;
+};
+
+export type ReviewComment = {
+  id: string;
+  review_id: string;
+  user_id: string;
+  parent_comment_id: string | null;
+  comment_text: string;
+  created_at: string;
+  updated_at: string;
+  commenter_display_name: string | null;
+  commenter_username: string | null;
+};
+
+export type ReviewEngagement = {
+  likeCount: number;
+  viewerHasLiked: boolean;
+  comments: ReviewComment[];
 };
 
 function getSupabaseClient() {
@@ -252,9 +271,130 @@ export async function saveOwnReview(input: ReviewDraftInput) {
     entityId: input.entityId,
   });
 
+  await syncBadgeProgressForCurrentUser();
+
   emitReviewsUpdated();
   return {
     review: data as OwnedReview,
     rewardCredits,
   } satisfies SavedReviewResult;
+}
+
+export async function getReviewEngagement(reviewId: string) {
+  const client = getSupabaseClient();
+  const user = await getAuthenticatedReviewUser();
+  const [{ data: likes, error: likesError }, { data: comments, error: commentsError }] = await Promise.all([
+    client.from("review_likes").select("user_id").eq("review_id", reviewId),
+    client
+      .from("review_comments")
+      .select("id, review_id, user_id, parent_comment_id, comment_text, created_at, updated_at")
+      .eq("review_id", reviewId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (likesError) {
+    throw likesError;
+  }
+
+  if (commentsError) {
+    throw commentsError;
+  }
+
+  const commentUserIds = Array.from(new Set((comments ?? []).map((comment) => comment.user_id))).filter(Boolean);
+  const { data: profiles, error: profilesError } =
+    commentUserIds.length > 0
+      ? await client.from("profiles").select("user_id, display_name, username").in("user_id", commentUserIds)
+      : { data: [], error: null as null };
+
+  if (profilesError) {
+    throw profilesError;
+  }
+
+  const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+
+  return {
+    likeCount: (likes ?? []).length,
+    viewerHasLiked: Boolean(user && (likes ?? []).some((like) => like.user_id === user.id)),
+    comments: (comments ?? []).map((comment) => ({
+      ...comment,
+      commenter_display_name: profileById.get(comment.user_id)?.display_name ?? null,
+      commenter_username: profileById.get(comment.user_id)?.username ?? null,
+    })) as ReviewComment[],
+  } satisfies ReviewEngagement;
+}
+
+export async function toggleReviewLike(reviewId: string, reviewOwnerUserId: string, shouldLike: boolean) {
+  const client = getSupabaseClient();
+  const user = await getAuthenticatedReviewUser();
+
+  if (!user) {
+    throw new Error("Log in to like reviews.");
+  }
+
+  if (shouldLike) {
+    const { error } = await client.from("review_likes").upsert(
+      {
+        review_id: reviewId,
+        user_id: user.id,
+      },
+      {
+        onConflict: "review_id,user_id",
+        ignoreDuplicates: true,
+      }
+    );
+
+    if (error) {
+      throw error;
+    }
+  } else {
+    const { error } = await client.from("review_likes").delete().eq("review_id", reviewId).eq("user_id", user.id);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  await Promise.all([
+    syncBadgeProgressForCurrentUser(),
+    syncBadgeProgressForUser(reviewOwnerUserId),
+  ]);
+
+  return getReviewEngagement(reviewId);
+}
+
+export async function addReviewComment(input: {
+  reviewId: string;
+  reviewOwnerUserId: string;
+  commentText: string;
+  parentCommentId?: string | null;
+}) {
+  const client = getSupabaseClient();
+  const user = await getAuthenticatedReviewUser();
+
+  if (!user) {
+    throw new Error("Log in to comment on reviews.");
+  }
+
+  const trimmedComment = input.commentText.trim();
+  if (trimmedComment.length < 12) {
+    throw new Error("Write at least 12 characters so the comment counts.");
+  }
+
+  const { error } = await client.from("review_comments").insert({
+    review_id: input.reviewId,
+    user_id: user.id,
+    parent_comment_id: input.parentCommentId ?? null,
+    comment_text: trimmedComment,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  await Promise.all([
+    syncBadgeProgressForCurrentUser(),
+    syncBadgeProgressForUser(input.reviewOwnerUserId),
+  ]);
+
+  return getReviewEngagement(input.reviewId);
 }

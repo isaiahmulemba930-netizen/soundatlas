@@ -2,6 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { syncBadgeProgressForCurrentUser, syncBadgeProgressForUser } from "@/lib/badges";
 import type { ProfileData } from "@/lib/social";
 
 export type PublicProfile = {
@@ -11,6 +12,7 @@ export type PublicProfile = {
   bio?: string | null;
   favorite_genres?: string | null;
   favorite_artist?: string | null;
+  pinned_badge_keys?: string[] | null;
 };
 
 export type FollowCounts = {
@@ -44,7 +46,7 @@ export async function getProfileByUsername(username: string) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("profiles")
-    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist")
+    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist, pinned_badge_keys")
     .eq("username", username)
     .maybeSingle();
 
@@ -59,7 +61,7 @@ export async function getProfileByUserId(userId: string) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("profiles")
-    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist")
+    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist, pinned_badge_keys")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -77,7 +79,7 @@ export async function searchProfiles(query: string, excludeUserId?: string) {
   const client = getSupabaseClient();
   let request = client
     .from("profiles")
-    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist")
+    .select("user_id, username, display_name, bio, favorite_genres, favorite_artist, pinned_badge_keys")
     .or(`username.ilike.%${trimmed}%,display_name.ilike.%${trimmed}%`)
     .limit(8);
 
@@ -155,7 +157,7 @@ async function getProfilesForUserIds(userIds: string[]) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("profiles")
-    .select("user_id, username, display_name")
+    .select("user_id, username, display_name, pinned_badge_keys")
     .in("user_id", userIds);
 
   if (error) {
@@ -220,6 +222,11 @@ export async function followUser(currentUser: User, targetUserId: string) {
   if (error) {
     throw error;
   }
+
+  await Promise.all([
+    syncBadgeProgressForCurrentUser(),
+    syncBadgeProgressForUser(targetUserId),
+  ]);
 }
 
 export async function unfollowUser(currentUser: User, targetUserId: string) {
@@ -233,6 +240,11 @@ export async function unfollowUser(currentUser: User, targetUserId: string) {
   if (error) {
     throw error;
   }
+
+  await Promise.all([
+    syncBadgeProgressForCurrentUser(),
+    syncBadgeProgressForUser(targetUserId),
+  ]);
 }
 
 export function profileRecordToProfileData(profile: PublicProfile | null): ProfileData {

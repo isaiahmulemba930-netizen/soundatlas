@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ReviewEngagementPanel } from "@/components/reviews/ReviewEngagementPanel";
 import { ReviewViewTracker } from "@/components/ReviewViewTracker";
 import { getPublicReviewDetail } from "@/lib/reviews";
 
@@ -110,6 +111,8 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
             </div>
           </div>
         </section>
+
+        <ReviewEngagementPanel reviewId={review.id} reviewOwnerUserId={review.reviewer_user_id} />
       </div>
     </main>
   );

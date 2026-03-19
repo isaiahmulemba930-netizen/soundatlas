@@ -1,5 +1,6 @@
 "use client";
 
+import { syncBadgeProgressForCurrentUser } from "@/lib/badges";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { buildPortfolioSummary } from "@/lib/music-market-portfolio";
 import type {
@@ -355,10 +356,11 @@ export async function getOwnMarketBadges() {
   }
 
   const { data, error } = await client
-    .from("market_badges")
-    .select("*")
+    .from("user_badges")
+    .select("id, user_id, badge_key, badge_name, badge_description, unlocked_at")
     .eq("user_id", user.id)
-    .order("awarded_at", { ascending: false });
+    .eq("badge_category", "Marketplace")
+    .order("unlocked_at", { ascending: false });
 
   if (error) {
     throw newErrorFromSupabase(error, "Unable to load your marketplace badges.");
@@ -368,9 +370,9 @@ export async function getOwnMarketBadges() {
     id: row.id,
     userId: row.user_id,
     badgeKey: row.badge_key,
-    badgeLabel: row.badge_label,
+    badgeLabel: row.badge_name,
     badgeDescription: row.badge_description,
-    awardedAt: row.awarded_at,
+    awardedAt: row.unlocked_at,
   })) as MarketBadge[];
 }
 
@@ -605,6 +607,7 @@ export async function buyMarketAsset(quote: MarketQuote, shares: number) {
 
   const [positions, transactions] = await Promise.all([getOwnMarketPositions(), getOwnMarketTransactions()]);
   await awardMarketBadges(user.id, positions, transactions);
+  await syncBadgeProgressForCurrentUser();
 }
 
 export async function sellMarketAsset(quote: MarketQuote, shares: number) {
@@ -713,4 +716,5 @@ export async function sellMarketAsset(quote: MarketQuote, shares: number) {
 
   const [positions, transactions] = await Promise.all([getOwnMarketPositions(), getOwnMarketTransactions()]);
   await awardMarketBadges(user.id, positions, transactions);
+  await syncBadgeProgressForCurrentUser();
 }

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BadgeShowcase } from "@/components/badges/BadgeShowcase";
+import { getBadgeSnapshotForUser, syncBadgeProgressForCurrentUser, type BadgeSnapshot } from "@/lib/badges";
 import {
   defaultProfile,
   getRatingStats,
@@ -33,6 +35,7 @@ export default function ProfilePage() {
   const [peopleResults, setPeopleResults] = useState<PublicProfile[]>([]);
   const [isSearchingPeople, setIsSearchingPeople] = useState(false);
   const [activeFollowUserId, setActiveFollowUserId] = useState("");
+  const [badgeSnapshot, setBadgeSnapshot] = useState<BadgeSnapshot | null>(null);
   const hasLoadedProfile = useRef(false);
 
   async function refreshSocialStateForUser(userId: string) {
@@ -72,9 +75,14 @@ export default function ProfilePage() {
         if (!isMounted) return;
 
         await refreshSocialStateForUser(user.id);
-        const reviews = await getOwnRecentReviews(user.id, 10);
+        await syncBadgeProgressForCurrentUser();
+        const [reviews, badges] = await Promise.all([
+          getOwnRecentReviews(user.id, 10),
+          getBadgeSnapshotForUser(user.id, { includeProgress: true }),
+        ]);
         if (!isMounted) return;
         setRecentReviews(reviews);
+        setBadgeSnapshot(badges);
         setSocialError("");
       } catch (error) {
         if (!isMounted) return;
@@ -238,9 +246,13 @@ export default function ProfilePage() {
                   <h2 className="text-3xl font-bold">
                     {profile.displayName || "Your Name"}
                   </h2>
-                  <p className="mt-1 text-[var(--text-soft)]">
-                    @{profile.username || "username"}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[var(--text-soft)]">
+                    <p>@{profile.username || "username"}</p>
+                    {badgeSnapshot?.certified ? <span className="pill">Certified</span> : null}
+                    {(badgeSnapshot?.pinnedBadges ?? []).slice(0, 3).map((badge) => (
+                      <span key={badge.key} className="pill">{badge.icon}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -281,8 +293,8 @@ export default function ProfilePage() {
               <p className="kicker">Stats</p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
-                  <p className="text-3xl font-bold">{ratingStats.total}</p>
-                  <p className="mt-2 text-sm text-[var(--text-soft)]">Total ratings</p>
+                  <p className="text-3xl font-bold">{badgeSnapshot?.totalBadgeCount ?? 0}</p>
+                  <p className="mt-2 text-sm text-[var(--text-soft)]">Badges earned</p>
                 </div>
                 <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
                   <p className="text-3xl font-bold">{followers.length}</p>
@@ -303,6 +315,8 @@ export default function ProfilePage() {
 
         <section className="mb-6 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="space-y-6">
+            {badgeSnapshot ? <BadgeShowcase snapshot={badgeSnapshot} editable /> : null}
+
             <div className="app-panel p-6">
               <p className="kicker">Edit profile</p>
               <div className="mt-5 space-y-4">

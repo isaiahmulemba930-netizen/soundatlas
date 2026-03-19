@@ -1,5 +1,6 @@
 "use client";
 
+import { syncBadgeProgressForCurrentUser } from "@/lib/badges";
 import { rewardListeningPlay } from "@/lib/music-market-client";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
@@ -219,6 +220,7 @@ export async function trackListeningEvent(event: ListeningEventInput) {
     entityType: event.albumId ? "album" : "song",
     entityId: event.albumId ?? event.trackId,
   });
+  await syncBadgeProgressForCurrentUser();
   emitListeningActivity();
   return {
     record: data as ListeningEventRecord,
@@ -248,6 +250,7 @@ export async function importListeningHistory(events: ListeningEventInput[]) {
     throw error;
   }
 
+  await syncBadgeProgressForCurrentUser();
   emitListeningActivity();
   return (data ?? []) as ListeningEventRecord[];
 }

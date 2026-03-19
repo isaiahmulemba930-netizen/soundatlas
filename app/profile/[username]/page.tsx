@@ -1,9 +1,11 @@
 "use client";
 
+import { BadgeShowcase } from "@/components/badges/BadgeShowcase";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { getBadgeSnapshotForUser, type BadgeSnapshot } from "@/lib/badges";
 import {
   areUsersMutualFollowers,
   followUser,
@@ -30,6 +32,7 @@ export default function PublicProfilePage() {
   const [followers, setFollowers] = useState<PublicProfile[]>([]);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
   const [publicReviews, setPublicReviews] = useState<OwnedReview[]>([]);
+  const [badgeSnapshot, setBadgeSnapshot] = useState<BadgeSnapshot | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isUpdatingFollow, setIsUpdatingFollow] = useState(false);
   const [canMessage, setCanMessage] = useState(false);
@@ -68,7 +71,7 @@ export default function PublicProfilePage() {
 
         setProfile(targetProfile);
 
-        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow, reviews] = await Promise.all([
+        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow, reviews, badges] = await Promise.all([
           getFollowCounts(targetProfile.user_id),
           getFollowers(targetProfile.user_id),
           getFollowing(targetProfile.user_id),
@@ -77,6 +80,7 @@ export default function PublicProfilePage() {
             ? areUsersMutualFollowers(currentViewer.id, targetProfile.user_id)
             : Promise.resolve(false),
           getPublicReviewsByUser(targetProfile.user_id, 10),
+          getBadgeSnapshotForUser(targetProfile.user_id),
         ]);
 
         if (!isMounted) return;
@@ -86,6 +90,7 @@ export default function PublicProfilePage() {
         setFollowers(nextFollowers);
         setFollowing(nextFollowing);
         setPublicReviews(reviews);
+        setBadgeSnapshot(badges);
         setIsFollowing(viewerFollows);
         setCanMessage(mutualFollow);
         setError("");
@@ -255,9 +260,13 @@ export default function PublicProfilePage() {
                   <h2 className="text-3xl font-bold">
                     {profile?.display_name || profile?.username || "Unknown user"}
                   </h2>
-                  <p className="mt-1 text-[var(--text-soft)]">
-                    @{profile?.username || "unknown"}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[var(--text-soft)]">
+                    <p>@{profile?.username || "unknown"}</p>
+                    {badgeSnapshot?.certified ? <span className="pill">Certified</span> : null}
+                    {(badgeSnapshot?.pinnedBadges ?? []).slice(0, 3).map((badge) => (
+                      <span key={badge.key} className="pill">{badge.icon}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -290,7 +299,11 @@ export default function PublicProfilePage() {
 
             <div className="app-panel p-6">
               <p className="kicker">Social</p>
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
+                  <p className="text-3xl font-bold">{badgeSnapshot?.totalBadgeCount ?? 0}</p>
+                  <p className="mt-2 text-sm text-[var(--text-soft)]">Badges earned</p>
+                </div>
                 <div className="rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
                   <p className="text-3xl font-bold">{followerCount}</p>
                   <p className="mt-2 text-sm text-[var(--text-soft)]">Followers</p>
@@ -305,6 +318,8 @@ export default function PublicProfilePage() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          {badgeSnapshot ? <BadgeShowcase snapshot={badgeSnapshot} /> : null}
+
           <div className="app-panel p-6">
             <h2 className="text-2xl font-bold">Followers</h2>
             <div className="mt-4 space-y-2">
