@@ -3,6 +3,7 @@
 import { syncBadgeProgressForCurrentUser } from "@/lib/badges";
 import { rewardListeningPlay } from "@/lib/music-market-client";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { syncTasteProfileForCurrentUser } from "@/lib/taste-matchmaking";
 
 export const LISTENING_ACTIVITY_EVENT = "soundatlas-listening-activity";
 
@@ -221,6 +222,7 @@ export async function trackListeningEvent(event: ListeningEventInput) {
     entityId: event.albumId ?? event.trackId,
   });
   await syncBadgeProgressForCurrentUser();
+  await syncTasteProfileForCurrentUser();
   emitListeningActivity();
   return {
     record: data as ListeningEventRecord,
@@ -251,6 +253,7 @@ export async function importListeningHistory(events: ListeningEventInput[]) {
   }
 
   await syncBadgeProgressForCurrentUser();
+  await syncTasteProfileForCurrentUser();
   emitListeningActivity();
   return (data ?? []) as ListeningEventRecord[];
 }

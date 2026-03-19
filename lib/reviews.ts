@@ -1,6 +1,7 @@
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { syncBadgeProgressForCurrentUser, syncBadgeProgressForUser } from "@/lib/badges";
 import { rewardReviewContribution } from "@/lib/music-market-client";
+import { syncTasteProfileForCurrentUser } from "@/lib/taste-matchmaking";
 
 export type ReviewEntityType = "song" | "album" | "artist";
 export type ReviewVisibility = "public" | "private";
@@ -272,6 +273,7 @@ export async function saveOwnReview(input: ReviewDraftInput) {
   });
 
   await syncBadgeProgressForCurrentUser();
+  await syncTasteProfileForCurrentUser();
 
   emitReviewsUpdated();
   return {

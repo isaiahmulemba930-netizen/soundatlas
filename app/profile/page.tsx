@@ -217,6 +217,12 @@ export default function ProfilePage() {
             <h1 className="mt-4 text-4xl font-bold md:text-6xl">Your profile</h1>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Link href="/taste-matchmaking" className="nav-link">
+              Taste Matchmaking
+            </Link>
+            <Link href="/groups" className="nav-link">
+              Groups
+            </Link>
             <Link href="/connections" className="nav-link">
               Platforms
             </Link>

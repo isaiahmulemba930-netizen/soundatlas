@@ -3,6 +3,7 @@
 import { syncBadgeProgressForCurrentUser } from "@/lib/badges";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { buildPortfolioSummary } from "@/lib/music-market-portfolio";
+import { syncTasteProfileForCurrentUser } from "@/lib/taste-matchmaking";
 import type {
   MarketAccount,
   MarketBadge,
@@ -608,6 +609,7 @@ export async function buyMarketAsset(quote: MarketQuote, shares: number) {
   const [positions, transactions] = await Promise.all([getOwnMarketPositions(), getOwnMarketTransactions()]);
   await awardMarketBadges(user.id, positions, transactions);
   await syncBadgeProgressForCurrentUser();
+  await syncTasteProfileForCurrentUser();
 }
 
 export async function sellMarketAsset(quote: MarketQuote, shares: number) {
@@ -717,4 +719,5 @@ export async function sellMarketAsset(quote: MarketQuote, shares: number) {
   const [positions, transactions] = await Promise.all([getOwnMarketPositions(), getOwnMarketTransactions()]);
   await awardMarketBadges(user.id, positions, transactions);
   await syncBadgeProgressForCurrentUser();
+  await syncTasteProfileForCurrentUser();
 }

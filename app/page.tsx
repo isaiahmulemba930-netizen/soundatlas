@@ -384,10 +384,10 @@ export default function Home() {
             <div>
               <p className="kicker">Search and discovery</p>
               <h2 className="mt-4 max-w-3xl text-5xl font-bold leading-[0.95] md:text-7xl">
-                Discover what matters right now, then go deeper with verified music data.
+                Make your listening history feel curated, social, and unmistakably yours.
               </h2>
               <p className="mt-5 max-w-2xl text-base leading-7 text-[var(--text-soft)] md:text-lg">
-                Move straight into album, artist, or track discovery with country-aware trending picks, real search results, and detail pages that stay grounded in verified sources.
+                SoundAtlas is designed to bring structure and community into music exploration, giving users a way to engage with music that goes beyond simply listening
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">

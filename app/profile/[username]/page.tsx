@@ -20,6 +20,7 @@ import {
 } from "@/lib/follows";
 import { getOrCreateDirectConversation } from "@/lib/messages";
 import { getPublicReviewsByUser, OwnedReview } from "@/lib/reviews";
+import { getTasteCompatibilitySummaryForUserId } from "@/lib/taste-matchmaking";
 
 export default function PublicProfilePage() {
   const params = useParams<{ username: string }>();
@@ -36,6 +37,7 @@ export default function PublicProfilePage() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isUpdatingFollow, setIsUpdatingFollow] = useState(false);
   const [canMessage, setCanMessage] = useState(false);
+  const [tasteSummary, setTasteSummary] = useState<Awaited<ReturnType<typeof getTasteCompatibilitySummaryForUserId>>>(null);
   const [isOpeningMessage, setIsOpeningMessage] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +73,7 @@ export default function PublicProfilePage() {
 
         setProfile(targetProfile);
 
-        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow, reviews, badges] = await Promise.all([
+        const [counts, nextFollowers, nextFollowing, viewerFollows, mutualFollow, reviews, badges, compatibilitySummary] = await Promise.all([
           getFollowCounts(targetProfile.user_id),
           getFollowers(targetProfile.user_id),
           getFollowing(targetProfile.user_id),
@@ -81,6 +83,7 @@ export default function PublicProfilePage() {
             : Promise.resolve(false),
           getPublicReviewsByUser(targetProfile.user_id, 10),
           getBadgeSnapshotForUser(targetProfile.user_id),
+          currentViewer ? getTasteCompatibilitySummaryForUserId(targetProfile.user_id) : Promise.resolve(null),
         ]);
 
         if (!isMounted) return;
@@ -93,6 +96,7 @@ export default function PublicProfilePage() {
         setBadgeSnapshot(badges);
         setIsFollowing(viewerFollows);
         setCanMessage(mutualFollow);
+        setTasteSummary(compatibilitySummary);
         setError("");
       } catch (loadError) {
         if (!isMounted) return;
@@ -294,6 +298,17 @@ export default function PublicProfilePage() {
                     {profile?.favorite_artist || "Not set yet"}
                   </p>
                 </div>
+                {tasteSummary ? (
+                  <Link href={profile?.username ? `/taste-matchmaking/${encodeURIComponent(profile.username)}` : "/taste-matchmaking"} className="app-panel p-4">
+                    <p className="kicker">Taste compatibility</p>
+                    <p className="mt-2 text-lg text-[var(--text-soft)]">
+                      {tasteSummary.compatibilityScore}% compatible
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      Shared favorites: {tasteSummary.sharedArtists.concat(tasteSummary.sharedGenres).slice(0, 3).join(", ") || "Match summary ready"}
+                    </p>
+                  </Link>
+                ) : null}
               </div>
             </div>
 
