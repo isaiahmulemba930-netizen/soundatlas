@@ -1,5 +1,6 @@
 "use client";
 
+import { AppTopNav } from "@/components/AppTopNav";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -160,6 +161,16 @@ export default function Home() {
   }, [currentProfile, loggedInUser]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authIntent = params.get("auth");
+
+    if (authIntent === "signin") {
+      setAuthMode("login");
+      setShowAuthCard(true);
+    }
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadGenrePulse() {
@@ -298,20 +309,6 @@ export default function Home() {
     }
   }
 
-  async function handleSignOut() {
-    const client = getSupabaseClient();
-    if (!client) return;
-
-    const { error } = await client.auth.signOut();
-    if (error) {
-      setSignupError(error.message);
-      return;
-    }
-
-    setLoggedInUser(null);
-    setCurrentProfile(null);
-  }
-
   const rotatingGenreSummary = useMemo(() => {
     return genrePulseSummary;
   }, [genrePulseSummary]);
@@ -379,38 +376,7 @@ export default function Home() {
             <h1 className="mt-4 max-w-3xl text-4xl font-bold leading-none md:text-6xl">{headline}</h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Link href="/marketplace" className="nav-link">
-              Marketplace
-            </Link>
-            <Link href="/discover/albums" className="nav-link">
-              Albums
-            </Link>
-            <Link href="/discover/artists" className="nav-link">
-              Artists
-            </Link>
-            <Link href="/discover/tracks" className="nav-link">
-              Tracks
-            </Link>
-            <Link href="/stats" className="nav-link">
-              Stats
-            </Link>
-            <Link href="/history" className="nav-link">
-              History
-            </Link>
-            <Link href="/profile" className="nav-link">
-              Your Profile
-            </Link>
-            {loggedInUser ? (
-              <button type="button" onClick={handleSignOut} className="app-button">
-                Sign out
-              </button>
-            ) : (
-              <button type="button" onClick={() => setShowAuthCard(true)} className="app-button">
-                Join SoundAtlas
-              </button>
-            )}
-          </div>
+          <AppTopNav />
         </header>
 
         <section className="hero-panel mb-6 p-6 md:mb-8 md:p-8">
@@ -449,10 +415,10 @@ export default function Home() {
                   style={{
                     background:
                       index === 0
-                        ? "linear-gradient(180deg, rgba(30,215,96,0.10), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
+                        ? "linear-gradient(180deg, rgba(214,84,58,0.18), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
                         : index === 1
-                          ? "linear-gradient(180deg, rgba(232,176,75,0.10), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
-                          : "linear-gradient(180deg, rgba(105,162,255,0.10), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
+                          ? "linear-gradient(180deg, rgba(185,41,41,0.16), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
+                          : "linear-gradient(180deg, rgba(134,15,15,0.18), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
                   }}
                 >
                   <p className="kicker">Entry point {index + 1}</p>
@@ -478,7 +444,7 @@ export default function Home() {
             {rotatingGenres.length === 0 ? (
               <div
                 className="editorial-panel p-5 text-sm leading-7 text-[var(--text-soft)] md:col-span-2 xl:col-span-5"
-                style={{ background: "linear-gradient(180deg, rgba(30,215,96,0.05), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)" }}
+                style={{ background: "linear-gradient(180deg, rgba(214,84,58,0.10), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)" }}
               >
                 No current genre pulse is ready to display yet. This section repopulates as soon as verified chart signals come through.
               </div>
@@ -491,10 +457,10 @@ export default function Home() {
                 style={{
                   background:
                     index % 3 === 0
-                      ? "linear-gradient(180deg, rgba(30,215,96,0.08), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
+                      ? "linear-gradient(180deg, rgba(214,84,58,0.14), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
                       : index % 3 === 1
-                        ? "linear-gradient(180deg, rgba(232,176,75,0.08), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
-                        : "linear-gradient(180deg, rgba(105,162,255,0.09), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
+                        ? "linear-gradient(180deg, rgba(185,41,41,0.14), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)"
+                        : "linear-gradient(180deg, rgba(134,15,15,0.16), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)",
                 }}
               >
                 <p className="kicker">Live genre pulse</p>
@@ -524,7 +490,7 @@ export default function Home() {
           {upcomingReleases.length === 0 ? (
             <div
               className="editorial-panel p-5 text-sm leading-7 text-[var(--text-soft)]"
-              style={{ background: "linear-gradient(180deg, rgba(232,176,75,0.05), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)" }}
+              style={{ background: "linear-gradient(180deg, rgba(185,41,41,0.12), rgba(255,255,255,0.02)), rgba(20,23,24,0.92)" }}
             >
               No verified upcoming releases are ready to show yet. This section updates as soon as real announcement and teaser signals settle.
             </div>

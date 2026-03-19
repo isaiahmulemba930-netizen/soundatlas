@@ -29,19 +29,11 @@ export default async function CatalogPage({ params }: CatalogPageProps) {
             </Link>
             <h1 className="mt-4 max-w-3xl text-4xl font-bold md:text-6xl">{lane.genre.title}</h1>
             <p className="mt-3 max-w-3xl text-[var(--text-soft)]">{lane.genre.description}</p>
-            <p className="mt-4 text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">
-              Refreshed from the latest verified genre pulse
-            </p>
+            {lane.signalLine ? (
+              <p className="mt-4 text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">{lane.signalLine}</p>
+            ) : null}
           </div>
         </div>
-
-        <section className="mb-5 rounded-[1.4rem] border p-6" style={{ borderColor: "var(--border-main)", background: "rgba(255,255,255,0.03)" }}>
-          <p className="kicker">Why this genre shows up</p>
-          <p className="mt-3 max-w-4xl text-sm leading-7 text-[var(--text-soft)]">{lane.summary}</p>
-          {lane.signalLine ? (
-            <p className="mt-4 text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">{lane.signalLine}</p>
-          ) : null}
-        </section>
 
         <section className="grid gap-5">
           {lane.albums.length === 0 ? (
@@ -65,7 +57,7 @@ export default async function CatalogPage({ params }: CatalogPageProps) {
                   style={{
                     backgroundImage: album.artworkUrl
                       ? `url(${album.artworkUrl})`
-                      : "linear-gradient(135deg, rgba(30,215,96,0.16), rgba(232,176,75,0.12))",
+                      : "linear-gradient(135deg, rgba(185,41,41,0.2), rgba(89,9,9,0.14))",
                   }}
                 >
                   <div className="relative z-10 flex h-full items-end p-4">

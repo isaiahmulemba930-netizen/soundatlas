@@ -340,6 +340,15 @@ async function searchAlbumsForTerm(term: string) {
   });
 }
 
+function normalizedGenreMatchesHints(genreValue: string, hints: string[]) {
+  const normalizedGenre = normalizeForSearch(genreValue);
+  if (!normalizedGenre) {
+    return false;
+  }
+
+  return hints.some((hint) => normalizedGenre.includes(hint) || hint.includes(normalizedGenre));
+}
+
 export async function searchGenreAlbums(
   searchTerms: string[],
   genreHints: string[],
@@ -359,13 +368,15 @@ export async function searchGenreAlbums(
         const normalizedGenre = normalizeForSearch(result.primaryGenreName ?? "");
         const normalizedTitle = normalizeForSearch(result.collectionName);
         const normalizedArtist = normalizeForSearch(result.artistName);
-        const hintMatch = normalizedHints.some((hint) => {
-          return normalizedGenre.includes(hint) || hint.includes(normalizedGenre);
-        });
+        const hintMatch = normalizedGenreMatchesHints(result.primaryGenreName ?? "", normalizedHints);
         const textMatch =
           normalizedTitle.includes(normalizedTerm) ||
           normalizedArtist.includes(normalizedTerm) ||
           normalizedGenre.includes(normalizedTerm);
+
+        if (!hintMatch) {
+          return;
+        }
 
         const existing = albumsById.get(result.collectionId);
         const scoreBoost = Math.max(8, 60 - resultIndex * 2) + (hintMatch ? 30 : 0) + (textMatch ? 14 : 0);

@@ -9,6 +9,7 @@ import {
   getTrendingArtists,
   getTrendingTracks,
   searchAlbums,
+  searchArtists,
   searchTracks,
 } from "@/lib/music-discovery";
 import { discoveryGenres } from "@/lib/genre-discovery";
@@ -261,6 +262,21 @@ function hypeLevel(changePercent: number, investorCount: number) {
   if (changePercent >= 9 || investorCount >= 6) return "Hot";
   if (changePercent >= 3 || investorCount >= 2) return "Warm";
   return "Low";
+}
+
+function matchesDiscoveryGenreValue(rawValue: string | null | undefined, aliases: string[]) {
+  const normalizedValue = String(rawValue ?? "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+  if (!normalizedValue) {
+    return false;
+  }
+
+  return aliases.some((alias) => normalizedValue.includes(alias) || alias.includes(normalizedValue));
 }
 
 async function buildSongQuote(ref: AssetRef) {
@@ -618,8 +634,91 @@ async function getPromisingTrackRefs(country: string, countryName: string): Prom
     }));
 }
 
+async function getPromisingArtistRefs(country: string, countryName: string): Promise<AssetRef[]> {
+  const rotation = getTwoHourRotationWindow();
+  const sortedGenres = [...discoveryGenres].sort((left, right) => left.slug.localeCompare(right.slug));
+  const seed = rotation.key.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const startIndex = seed % Math.max(sortedGenres.length, 1);
+  const selectedGenres = Array.from({ length: 3 }, (_, index) => sortedGenres[(startIndex + index) % sortedGenres.length]);
+  const results = await Promise.all(selectedGenres.map((genre) => searchArtists(genre.title).catch(() => [])));
+  const candidates = new Map<string, { id: string; score: number }>();
+
+  results.forEach((artistResults, genreIndex) => {
+    const genre = selectedGenres[genreIndex];
+    artistResults.forEach((artist, artistIndex) => {
+      const genreMatch = artist.genres.some((artistGenre) => matchesDiscoveryGenreValue(artistGenre, genre.aliases));
+      if (!genreMatch) {
+        return;
+      }
+
+      const score = Math.max(16, 50 - artistIndex * 4) + Math.min(artist.genres.length, 3) * 6;
+      const existing = candidates.get(artist.id);
+      if (!existing || score > existing.score) {
+        candidates.set(artist.id, { id: artist.id, score });
+      }
+    });
+  });
+
+  return Array.from(candidates.values())
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 3)
+    .map((candidate) => ({
+      entityType: "artist" as const,
+      entityId: candidate.id,
+      country,
+      countryName,
+    }));
+}
+
+async function getPromisingAlbumRefs(country: string, countryName: string): Promise<AssetRef[]> {
+  const rotation = getTwoHourRotationWindow();
+  const sortedGenres = [...discoveryGenres].sort((left, right) => left.slug.localeCompare(right.slug));
+  const seed = rotation.key.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const startIndex = seed % Math.max(sortedGenres.length, 1);
+  const selectedGenres = Array.from({ length: 3 }, (_, index) => sortedGenres[(startIndex + index) % sortedGenres.length]);
+  const results = await Promise.all(selectedGenres.map((genre) => searchAlbums(genre.title, country).catch(() => [])));
+  const candidates = new Map<string, { id: string; score: number }>();
+
+  results.forEach((albumResults, genreIndex) => {
+    const genre = selectedGenres[genreIndex];
+    albumResults.forEach((album, albumIndex) => {
+      if (!matchesDiscoveryGenreValue(album.genre, genre.aliases)) {
+        return;
+      }
+
+      const ageDays = getDaysSince(album.releaseDate);
+      const recencyScore = ageDays === null ? 0.15 : clamp((420 - Math.min(ageDays, 420)) / 420, 0, 1);
+      if (recencyScore < 0.08) {
+        return;
+      }
+
+      const score = Math.max(14, 48 - albumIndex * 3) + recencyScore * 24;
+      const existing = candidates.get(String(album.id));
+      if (!existing || score > existing.score) {
+        candidates.set(String(album.id), { id: String(album.id), score });
+      }
+    });
+  });
+
+  return Array.from(candidates.values())
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2)
+    .map((candidate) => ({
+      entityType: "album" as const,
+      entityId: candidate.id,
+      country,
+      countryName,
+    }));
+}
+
 async function getUndergroundMoverRefs(country: string, countryName: string): Promise<AssetRef[]> {
-  return getPromisingTrackRefs(country, countryName);
+  const [tracks, artists, albums] = await Promise.all([
+    getPromisingTrackRefs(country, countryName),
+    getPromisingArtistRefs(country, countryName),
+    getPromisingAlbumRefs(country, countryName),
+  ]);
+
+  return [...tracks.slice(0, 2), ...artists.slice(0, 2), ...albums.slice(0, 2)].slice(0, 6);
 }
 
 export async function searchMarketplaceAlbums(query: string, country: string, countryName: string) {

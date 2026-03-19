@@ -18,9 +18,9 @@
   --text-soft: #c8c1af;
   --text-muted: #948c7e;
 
-  --accent-green: #1ed760;
-  --accent-green-deep: #169c47;
-  --accent-gold: #e8b04b;
+  --accent-green: #d6543a;
+  --accent-green-deep: #9f261d;
+  --accent-gold: #f08a6b;
   --accent-red: #d6543a;
   --accent-cream: #f4efe0;
 
@@ -30,8 +30,8 @@
 html {
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(30, 215, 96, 0.14), transparent 30%),
-    radial-gradient(circle at top right, rgba(214, 84, 58, 0.12), transparent 28%),
+    radial-gradient(circle at top left, rgba(214, 84, 58, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(122, 16, 16, 0.16), transparent 28%),
     linear-gradient(180deg, #121516 0%, #0d0f10 56%, #090a0b 100%);
 }
 
@@ -87,8 +87,8 @@ textarea::placeholder {
 }
 
 ::selection {
-  background: rgba(30, 215, 96, 0.95);
-  color: #08120d;
+  background: rgba(214, 84, 58, 0.95);
+  color: #1a0505;
 }
 
 .page-shell {
@@ -120,7 +120,7 @@ textarea::placeholder {
   height: 0.75rem;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--accent-green), var(--accent-gold));
-  box-shadow: 0 0 20px rgba(30, 215, 96, 0.35);
+  box-shadow: 0 0 20px rgba(214, 84, 58, 0.35);
 }
 
 .nav-link,
@@ -152,21 +152,21 @@ textarea::placeholder {
 }
 
 .solid-button {
-  color: #0b120d;
-  background: linear-gradient(135deg, var(--accent-green), #65e08f 72%);
-  box-shadow: 0 14px 30px rgba(30, 215, 96, 0.26);
+  color: #190606;
+  background: linear-gradient(135deg, var(--accent-green), #ff9b7e 72%);
+  box-shadow: 0 14px 30px rgba(214, 84, 58, 0.28);
 }
 
 .solid-button:hover,
 .app-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 40px rgba(30, 215, 96, 0.3);
+  box-shadow: 0 18px 40px rgba(214, 84, 58, 0.32);
 }
 
 .app-button {
-  color: #0b120d;
-  background: linear-gradient(135deg, var(--accent-gold), #f2cc7a 72%);
-  box-shadow: 0 14px 30px rgba(232, 176, 75, 0.24);
+  color: #190606;
+  background: linear-gradient(135deg, #7a1010, var(--accent-green) 72%);
+  box-shadow: 0 14px 30px rgba(122, 16, 16, 0.3);
 }
 
 .kicker {
@@ -191,8 +191,8 @@ textarea::placeholder {
 .hero-panel {
   border-radius: 2rem;
   background:
-    radial-gradient(circle at top left, rgba(30, 215, 96, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(232, 176, 75, 0.12), transparent 24%),
+    radial-gradient(circle at top left, rgba(214, 84, 58, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(122, 16, 16, 0.16), transparent 24%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
     rgba(17, 20, 21, 0.94);
 }
@@ -252,8 +252,8 @@ textarea::placeholder {
 
 .app-input:focus,
 .app-textarea:focus {
-  border-color: rgba(30, 215, 96, 0.5);
-  box-shadow: 0 0 0 4px rgba(30, 215, 96, 0.08);
+  border-color: rgba(214, 84, 58, 0.55);
+  box-shadow: 0 0 0 4px rgba(214, 84, 58, 0.1);
 }
 
 .cover-frame {
@@ -316,9 +316,9 @@ textarea::placeholder {
   min-height: 10px;
   border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(30, 215, 96, 0.98), rgba(232, 176, 75, 0.82)),
+    linear-gradient(180deg, rgba(214, 84, 58, 0.98), rgba(122, 16, 16, 0.86)),
     rgba(255, 255, 255, 0.08);
-  box-shadow: 0 18px 36px rgba(30, 215, 96, 0.2);
+  box-shadow: 0 18px 36px rgba(214, 84, 58, 0.24);
 }
 
 .listening-skeleton {

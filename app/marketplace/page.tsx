@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
+import { AppTopNav } from "@/components/AppTopNav";
 import { AlbumInvestmentSearchCard } from "@/components/marketplace/AlbumInvestmentSearchCard";
 import { MarketQuoteCard } from "@/components/marketplace/MarketQuoteCard";
 import { PortfolioPanel } from "@/components/marketplace/PortfolioPanel";
@@ -54,11 +55,7 @@ export default async function MarketplacePage({ searchParams }: MarketplacePageP
               Build a diversified music portfolio in {dashboard.marketCountryName} by investing in songs, artists, and albums you believe will grow in popularity.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/discover/albums" className="nav-link">Albums</Link>
-            <Link href="/discover/artists" className="nav-link">Artists</Link>
-            <Link href="/discover/tracks" className="nav-link">Tracks</Link>
-          </div>
+          <AppTopNav active="marketplace" />
         </div>
 
         <section className="hero-panel mb-6 p-6 md:p-8">
@@ -78,6 +75,8 @@ export default async function MarketplacePage({ searchParams }: MarketplacePageP
             <span className="pill">Newer albums carry the strongest AC upside</span>
           </div>
         </section>
+
+        <PortfolioPanel seedQuotes={seedQuotes} />
 
         <section className="mb-6 app-panel p-6 md:p-7">
           <p className="kicker">Album search</p>
@@ -180,7 +179,11 @@ export default async function MarketplacePage({ searchParams }: MarketplacePageP
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {dashboard.undergroundMovers.length > 0 ? (
               dashboard.undergroundMovers.map((quote) => (
-                <MarketQuoteCard key={`${quote.entityType}:${quote.entityId}`} quote={quote} emphasis="Low streams | high growth" />
+                <MarketQuoteCard
+                  key={`${quote.entityType}:${quote.entityId}`}
+                  quote={quote}
+                  emphasis={quote.entityType === "song" ? "Song boom-or-bust" : quote.entityType === "artist" ? "Artist breakout watch" : "Album breakout watch"}
+                />
               ))
             ) : (
               <div className="app-panel p-5 text-sm leading-7 text-[var(--text-soft)] md:col-span-2 xl:col-span-4">
@@ -251,7 +254,6 @@ export default async function MarketplacePage({ searchParams }: MarketplacePageP
           </div>
         </section>
 
-        <PortfolioPanel seedQuotes={seedQuotes} />
       </div>
     </main>
   );

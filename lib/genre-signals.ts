@@ -159,7 +159,23 @@ const SEARCH_TERM_OVERRIDES: Record<string, { searchTerms: string[]; genreHints:
   },
   drill: {
     searchTerms: ["drill albums", "uk drill albums", "brooklyn drill albums", "Pop Smoke album", "Headie One album"],
-    genreHints: ["drill", "uk drill", "brooklyn drill", "hip-hop/rap"],
+    genreHints: ["drill", "uk drill", "brooklyn drill"],
+  },
+  gospel: {
+    searchTerms: ["gospel albums", "black gospel albums", "contemporary gospel albums"],
+    genreHints: ["gospel", "christian", "christian and gospel", "christian & gospel"],
+  },
+  "contemporary-worship": {
+    searchTerms: ["contemporary worship albums", "worship music albums", "christian worship albums"],
+    genreHints: ["worship", "christian", "gospel", "christian and gospel", "christian & gospel"],
+  },
+  choral: {
+    searchTerms: ["choral albums", "choir albums", "sacred choral albums"],
+    genreHints: ["choral", "choir", "classical", "sacred"],
+  },
+  "sacred-jazz": {
+    searchTerms: ["spiritual jazz albums", "sacred jazz albums", "gospel jazz albums"],
+    genreHints: ["spiritual jazz", "jazz", "gospel", "sacred"],
   },
   "hip-hop": {
     searchTerms: ["hip hop albums", "rap albums", "hip-hop albums"],
