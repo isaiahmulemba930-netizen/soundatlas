@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { TimeframeTabs } from "@/components/listening/TimeframeTabs";
-import { syncConnectedPlatforms } from "@/lib/music-platforms";
 import {
   buildOnThisDayMemory,
   buildRecommendationSections,
@@ -128,9 +127,6 @@ export default function StatsPage() {
           return;
         }
 
-        const existingConnections = await getMusicPlatformConnections();
-        await syncConnectedPlatforms(existingConnections);
-
         const requests = [
           getListeningStats(timeframe),
           timeframe === "weekly" ? Promise.resolve(null) : getListeningStats("weekly"),
@@ -247,7 +243,7 @@ export default function StatsPage() {
               ) : null}
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link href="/connections" className="ghost-button">
-                  Connect platforms
+                  Listening setup
                 </Link>
                 <Link href="/history" className="ghost-button">
                   Open full history
@@ -420,7 +416,8 @@ export default function StatsPage() {
                 <p className="kicker">Source categories</p>
                 <h2 className="section-heading mt-3 font-bold">Where this listening came from.</h2>
                 <p className="mt-3 text-[var(--text-soft)]">
-                  In-app plays work without any connected platform. Linked platform listening appears here in its own category and is also merged into your totals.
+                  SoundAtlas stats now grow from the plays you log inside the app, with each tracked
+                  session flowing straight into your totals.
                 </p>
                 <div className="mt-6 space-y-3">
                   {stats.sourceBreakdown.length === 0 ? (
@@ -450,13 +447,13 @@ export default function StatsPage() {
               </div>
 
               <div className="editorial-panel p-6 md:p-7">
-                <p className="kicker">Platform support</p>
-                <h2 className="section-heading mt-3 font-bold">Do users need to connect a platform?</h2>
+                <p className="kicker">Tracking model</p>
+                <h2 className="section-heading mt-3 font-bold">How listening history works right now</h2>
                 <div className="mt-5 space-y-4 text-sm leading-7 text-[var(--text-soft)]">
-                  <p>No. SoundAtlas stats work immediately for plays tracked inside the app.</p>
-                  <p>Yes, if the user wants connected listening from another service to appear under its own source category.</p>
-                  <p>Supported now: Spotify sign-in.</p>
-                  <p>Spotify can sync recent listening from the connected account and roll it into stats while keeping Spotify visible as its own source category.</p>
+                  <p>SoundAtlas stats work from plays you track inside the app.</p>
+                  <p>Spotify and Apple Music sign-in are both turned off for now.</p>
+                  <p>That means your history, streaks, and recommendations build from real in-app listening activity only.</p>
+                  <p>Once you log plays regularly, the dashboard updates automatically across weekly and all-time views.</p>
                 </div>
               </div>
             </section>
